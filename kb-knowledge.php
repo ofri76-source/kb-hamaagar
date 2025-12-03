@@ -88,6 +88,8 @@ class KB_KnowledgeBase_Editor {
             check_script TEXT DEFAULT NULL,
             check_files TEXT DEFAULT NULL,
             links TEXT DEFAULT NULL,
+            review_status TINYINT(1) NOT NULL DEFAULT 0,
+            is_deleted TINYINT(1) NOT NULL DEFAULT 0,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP
         ) $charset_collate;";
         $sql2 = "CREATE TABLE IF NOT EXISTS $cats_table (
@@ -112,6 +114,14 @@ class KB_KnowledgeBase_Editor {
         $cols3 = $wpdb->get_results("SHOW COLUMNS FROM $cats_table LIKE 'sort_order'");
         if(empty($cols3)) {
             $wpdb->query("ALTER TABLE $cats_table ADD COLUMN sort_order INT DEFAULT 0");
+        }
+        $cols4 = $wpdb->get_results("SHOW COLUMNS FROM $table LIKE 'review_status'");
+        if(empty($cols4)) {
+            $wpdb->query("ALTER TABLE $table ADD COLUMN review_status TINYINT(1) NOT NULL DEFAULT 0 AFTER links");
+        }
+        $cols5 = $wpdb->get_results("SHOW COLUMNS FROM $table LIKE 'is_deleted'");
+        if(empty($cols5)) {
+            $wpdb->query("ALTER TABLE $table ADD COLUMN is_deleted TINYINT(1) NOT NULL DEFAULT 0 AFTER review_status");
         }
         if(!$wpdb->get_var("SELECT COUNT(*) FROM $cats_table")) {
             $wpdb->insert($cats_table, ['category_name'=>'שרתים', 'parent_id'=>0, 'sort_order'=>1]);
@@ -258,16 +268,52 @@ class KB_KnowledgeBase_Editor {
         return date('d/m/Y H:i', $timestamp);
     }
 
+    private function get_status_labels() {
+        if(class_exists('KB_KnowledgeBase_Unified_Core')) {
+            return KB_KnowledgeBase_Unified_Core::status_labels();
+        }
+        return [0=>'לא נבדק',1=>'בתהליך',2=>'תקין'];
+    }
+
+    private function render_status_badge($status) {
+        $status = is_null($status) ? 0 : intval($status);
+        $labels = $this->get_status_labels();
+        $label = isset($labels[$status]) ? $labels[$status] : $labels[0];
+        $class = 'kb-status-badge '; $dot = '';
+        if($status === 2) { $class .= 'kb-status-badge--green'; $dot = '🟢'; }
+        elseif($status === 1) { $class .= 'kb-status-badge--orange'; $dot = '🟠'; }
+        else { $class .= 'kb-status-badge--red'; $dot = '🔴'; }
+        return '<span class="'.$class.'">'.$dot.' '.$label.'</span>';
+    }
+
     public function main_page() {
         global $wpdb;
         $table = $wpdb->prefix . 'kb_articles';
+        $view_trash = isset($_GET['view']) && $_GET['view'] === 'trash';
+
+        $action = isset($_GET['kb_action']) ? sanitize_key($_GET['kb_action']) : '';
+        $target_id = isset($_GET['id']) ? intval($_GET['id']) : 0;
+        if($action && $target_id){
+            $nonce = isset($_GET['_wpnonce']) ? $_GET['_wpnonce'] : '';
+            if(!wp_verify_nonce($nonce, 'kb_action_'.$target_id)) wp_die('Nonce failed');
+            if($action === 'trash') {
+                $wpdb->update($table, ['is_deleted'=>1], ['id'=>$target_id], ['%d'], ['%d']);
+            } elseif($action === 'restore') {
+                $wpdb->update($table, ['is_deleted'=>0], ['id'=>$target_id], ['%d'], ['%d']);
+            } elseif($action === 'delete') {
+                $wpdb->delete($table, ['id'=>$target_id]);
+            }
+            wp_safe_redirect(admin_url('admin.php?page=kb-editor'.($view_trash ? '&view=trash' : '')));
+            exit;
+        }
+
         $search = isset($_GET['q']) ? sanitize_text_field($_GET['q']) : '';
-        $sql = "SELECT * FROM $table";
+        $sql = "SELECT * FROM $table WHERE ".($view_trash ? "is_deleted=1" : "(is_deleted IS NULL OR is_deleted=0)");
         if ($search !== '') {
             $like = '%' . $wpdb->esc_like($search) . '%';
             $sql .= $wpdb->prepare(
-                " WHERE category LIKE %s OR subject LIKE %s OR
-                short_desc LIKE %s OR technical_desc LIKE %s OR technical_solution LIKE %s",
+                " AND (category LIKE %s OR subject LIKE %s OR
+                short_desc LIKE %s OR technical_desc LIKE %s OR technical_solution LIKE %s)",
                 $like,$like,$like,$like,$like
             );
         }
@@ -275,28 +321,37 @@ class KB_KnowledgeBase_Editor {
         $articles = $wpdb->get_results($sql);
 
         echo '<div class="wrap"><h1>המאגר <a href="'.admin_url('admin.php?page=kb-editor-new').'" class="button button-primary">מאמר חדש</a></h1>';
-        echo '<form method="get" class="kb-search-form"><input type="hidden" name="page" value="kb-editor">
-            <input type="text" name="q" placeholder="חיפוש..." value="'.esc_attr($search).'">
+        echo '<h2 class="nav-tab-wrapper">';
+        echo '<a class="nav-tab '.(!$view_trash ? 'nav-tab-active' : '').'" href="'.admin_url('admin.php?page=kb-editor').'">מאמרים פעילים</a>';
+        echo '<a class="nav-tab '.($view_trash ? 'nav-tab-active' : '').'" href="'.admin_url('admin.php?page=kb-editor&view=trash').'">סל מחזור</a>';
+        echo '</h2>';
+        echo '<form method="get" class="kb-search-form"><input type="hidden" name="page" value="kb-editor">';
+        if($view_trash) echo '<input type="hidden" name="view" value="trash">';
+        echo '<input type="text" name="q" placeholder="חיפוש..." value="'.esc_attr($search).'">
             <button type="submit" class="button">חיפוש</button></form>';
         echo '<table class="wp-list-table widefat kb-table"><thead><tr>
-            <th>נושא</th><th>קטגוריה</th><th>נוצר בתאריך</th><th>פעולות</th>
+            <th>נושא</th><th>קטגוריה</th><th>סטטוס</th><th>נוצר בתאריך</th><th>פעולות</th>
         </tr></thead><tbody>';
         foreach ($articles as $a) {
+            $nonce = wp_create_nonce('kb_action_'.$a->id);
+            $status_badge = $this->render_status_badge($a->review_status);
             echo '<tr>
                 <td>' . esc_html($a->subject) . '</td>
                 <td>' . esc_html($a->category) . '</td>
+                <td>' . $status_badge . '</td>
                 <td>' . esc_html($this->format_hebrew_date($a->created_at)) . '</td>
-                <td>
-                    <a href="?page=kb-editor-new&edit=' . intval($a->id) . '" class="button">עריכה</a>
-                    <a href="?page=kb-editor&delete=' . intval($a->id) . '" class="button button-danger" onclick="return confirm(\'למחוק?\');">מחיקה</a>
-                </td>
+                <td>';
+            if(!$view_trash) {
+                echo '<a href="?page=kb-editor-new&edit=' . intval($a->id) . '" class="button">עריכה</a> ';
+                echo '<a href="'.wp_nonce_url('?page=kb-editor&kb_action=trash&id='.intval($a->id), 'kb_action_'.$a->id).'" class="button button-danger" onclick="return confirm(\'להעביר לסל מחזור?\');">העבר לסל מחזור</a>';
+            } else {
+                echo '<a href="'.wp_nonce_url('?page=kb-editor&view=trash&kb_action=restore&id='.intval($a->id), 'kb_action_'.$a->id).'" class="button">שחזר</a> ';
+                echo '<a href="'.wp_nonce_url('?page=kb-editor&view=trash&kb_action=delete&id='.intval($a->id), 'kb_action_'.$a->id).'" class="button button-danger" onclick="return confirm(\'למחוק לצמיתות?\');">מחק לצמיתות</a>';
+            }
+            echo '</td>
             </tr>';
         }
         echo '</tbody></table></div>';
-        if (isset($_GET['delete'])) {
-            $wpdb->delete($table, ['id'=>intval($_GET['delete'])]);
-            echo "<script>location.href='".admin_url('admin.php?page=kb-editor')."'</script>";
-        }
     }
 	public function shortcode_tree($atts) {
 		global $wpdb;
@@ -316,7 +371,7 @@ public function print_tree($cats, $parent, $table, $home_url) {
     foreach ($cats as $c) {
         if($c->parent_id == $parent) {
             echo "<li style='margin:12px 0;'><span style='font-weight:bold;color:#34495e;font-size:1.13em'>" . esc_html($c->category_name) . "</span>";
-            $articles = $wpdb->get_results($wpdb->prepare("SELECT id, subject FROM $table WHERE category LIKE %s ORDER BY subject", '%'.$wpdb->esc_like($c->category_name).'%'));
+            $articles = $wpdb->get_results($wpdb->prepare("SELECT id, subject FROM $table WHERE (is_deleted IS NULL OR is_deleted=0) AND category LIKE %s ORDER BY subject", '%'.$wpdb->esc_like($c->category_name).'%'));
             if($articles) {
                 echo "<ul style='margin-top:2px;'>";
                 foreach($articles as $a){
@@ -338,6 +393,8 @@ public function print_tree($cats, $parent, $table, $home_url) {
         $article = null;
         if (isset($_GET['edit'])) $article = $wpdb->get_row($wpdb->prepare("SELECT * FROM $table WHERE id=%d", intval($_GET['edit'])));
         $cats_tree = $this->get_categories_tree();
+        $status_labels = $this->get_status_labels();
+        $current_status = $article ? intval($article->review_status) : 0;
 
         echo '<div class="wrap"><h1>' . ($article ? 'עריכת מאמר' : 'הוסף מאמר חדש') . '</h1>';
         echo '<form id="kb-article-form" class="kb-form" enctype="multipart/form-data">';
@@ -347,11 +404,16 @@ public function print_tree($cats, $parent, $table, $home_url) {
         echo '<fieldset class="kb-fieldset"><legend>נתונים כלליים</legend>';
         echo '<div class="kb-row"><label class="kb-label">קטגוריה:</label>
             <select name="category" class="kb-input">';
-        foreach($cats_tree as $v) 
+        foreach($cats_tree as $v)
             echo '<option value="'.$v.'" '.($article && $article->category==$v ? 'selected' : '').'>'.$v.'</option>';
         echo '</select></div>';
         echo '<div class="kb-row"><label class="kb-label">נושא: <span style="color:red;">*</span></label>
             <input type="text" name="subject" class="kb-input" value="'.($article ? esc_attr($article->subject) : '').'" required></div>';
+        echo '<div class="kb-row"><label class="kb-label">סטטוס בדיקה:</label><select name="review_status" class="kb-input">';
+        foreach($status_labels as $k=>$lbl) {
+            echo '<option value="'.intval($k).'" '.selected($current_status, $k, false).'>'.esc_html($lbl).'</option>';
+        }
+        echo '</select></div>';
         echo '</fieldset>';
 
         echo '<fieldset class="kb-fieldset"><legend>פרטים</legend>';
@@ -549,7 +611,10 @@ public function print_tree($cats, $parent, $table, $home_url) {
         if(empty($tech_solution) || $tech_solution === '<p>&nbsp;</p>' || $tech_solution === '<p></p>') {
             wp_send_json_error(['message' => 'שדה פתרון טכני הוא שדה חובה']);
         }
-        
+
+        $status = isset($_POST['review_status']) ? intval($_POST['review_status']) : 0;
+        if($status < 0 || $status > 2) { $status = 0; }
+
         // ⭐ בדיקת כפילויות - רק אם זה מאמר חדש
         $article_id = isset($_POST['article_id']) ? intval($_POST['article_id']) : 0;
         if(!$article_id) {
@@ -571,6 +636,8 @@ public function print_tree($cats, $parent, $table, $home_url) {
                 $data[$f] = wp_kses_post($_POST[$f]);
             }
         }
+
+        $data['review_status'] = $status;
         
         if (isset($_FILES['solution_files']) && !empty($_FILES['solution_files']['name'][0])) {
             require_once(ABSPATH . 'wp-admin/includes/file.php');
@@ -641,10 +708,12 @@ public function print_tree($cats, $parent, $table, $home_url) {
     public function public_form_shortcode() {
         global $wpdb;
         $cats_tree = $this->get_categories_tree();
-        
+
         $edit_id = isset($_GET['edit_article']) ? intval($_GET['edit_article']) : 0;
         $article = $edit_id ? $wpdb->get_row($wpdb->prepare("SELECT * FROM {$wpdb->prefix}kb_articles WHERE id=%d", $edit_id)) : null;
-        
+        $status_labels = $this->get_status_labels();
+        $current_status = $article ? intval($article->review_status) : 0;
+
         $kb_home_url = isset($_SERVER['HTTP_REFERER']) ? $_SERVER['HTTP_REFERER'] : get_permalink(get_the_ID());
         $kb_home_url = remove_query_arg('edit_article', $kb_home_url);
         
@@ -672,6 +741,11 @@ public function print_tree($cats, $parent, $table, $home_url) {
                 </div>
                 <div class="kb-row"><label class="kb-label">נושא: <span style="color:red;">*</span></label>
                     <input type="text" name="subject" class="kb-input" value="<?php echo $article ? esc_attr($article->subject) : ''; ?>" required>
+                </div>
+                <div class="kb-row"><label class="kb-label">סטטוס בדיקה:</label>
+                    <select name="review_status" class="kb-input">
+                        <?php foreach($status_labels as $k=>$lbl) echo '<option value="'.intval($k).'" '.selected($current_status, $k, false).'>'.esc_html($lbl).'</option>'; ?>
+                    </select>
                 </div>
             </fieldset>
             
@@ -883,7 +957,7 @@ public function print_tree($cats, $parent, $table, $home_url) {
         $page_url = get_permalink($page_id);
         
         if($article_id > 0){
-            $article = $wpdb->get_row($wpdb->prepare("SELECT * FROM $table WHERE id=%d", $article_id));
+            $article = $wpdb->get_row($wpdb->prepare("SELECT * FROM $table WHERE (is_deleted IS NULL OR is_deleted=0) AND id=%d", $article_id));
             if(!$article) return '<div class="kb-notfound">❌ מאמר לא נמצא.</div>';
             
             $add_article_page = get_page_by_path('add-article');
@@ -905,6 +979,7 @@ public function print_tree($cats, $parent, $table, $home_url) {
                 
                 <h1><?php echo esc_html($article->subject); ?></h1>
                 <div class="kb-meta">📁 <strong><?php echo esc_html($article->category); ?></strong> | 📅 <?php echo esc_html($this->format_hebrew_date($article->created_at)); ?></div>
+                <div class="kb-meta kb-meta-status"><?php echo $this->render_status_badge($article->review_status); ?></div>
                 <?php if($article->short_desc): ?><div class="kb-section"><h3>תיאור קצר</h3><?php echo $article->short_desc; ?></div><?php endif; ?>
                 <?php if($article->technical_desc): ?><div class="kb-section"><h3>תיאור טכני</h3><?php echo $article->technical_desc; ?></div><?php endif; ?>
                 <?php if($article->technical_solution): ?><div class="kb-section"><h3>פתרון טכני</h3><?php echo $article->technical_solution; ?></div><?php endif; ?>
@@ -1053,7 +1128,7 @@ public function print_tree($cats, $parent, $table, $home_url) {
             
             <div class="kb-results">
                 <?php
-                $sql = "SELECT * FROM $table WHERE 1=1";
+                $sql = "SELECT * FROM $table WHERE (is_deleted IS NULL OR is_deleted=0)";
                 if($search !== '') {
                     $like = '%' . $wpdb->esc_like($search) . '%';
                     $sql .= $wpdb->prepare(" AND (subject LIKE %s OR short_desc LIKE %s OR technical_desc LIKE %s OR category LIKE %s)", $like, $like, $like, $like);
@@ -1072,9 +1147,12 @@ public function print_tree($cats, $parent, $table, $home_url) {
                         $article_url = add_query_arg(['page_id' => $page_id, 'kb_article' => $article->id], home_url('/'));
                     ?>
                     <div class="kb-result-item">
-                        <h3><a href="<?php echo esc_url($article_url); ?>"><?php echo esc_html($article->subject); ?></a></h3>
+                        <div class="kb-result-header">
+                            <h3><a href="<?php echo esc_url($article_url); ?>"><?php echo esc_html($article->subject); ?></a></h3>
+                            <div class="kb-result-status"><?php echo $this->render_status_badge($article->review_status); ?></div>
+                        </div>
                         <div class="kb-meta">
-                            <span class="kb-category">📁 <?php echo esc_html($article->category); ?></span> | 
+                            <span class="kb-category">📁 <?php echo esc_html($article->category); ?></span> |
                             <span class="kb-date">📅 <?php echo esc_html($this->format_hebrew_date($article->created_at)); ?></span>
                         </div>
                         <p><?php echo esc_html($excerpt); ?></p>
@@ -1122,6 +1200,8 @@ public function print_tree($cats, $parent, $table, $home_url) {
         .kb-result-item h3 { margin:0 0 10px 0; font-size:1.5em; }
         .kb-result-item h3 a { color:#2c3e50; text-decoration:none; }
         .kb-result-item h3 a:hover { color:#3498db; }
+        .kb-result-header { display:flex; justify-content:space-between; align-items:center; gap:10px; }
+        .kb-result-status { flex-shrink:0; }
         .kb-meta { font-size:0.9em; color:#7f8c8d; margin-bottom:12px; }
         .kb-category { font-weight:bold; color:#e67e22; }
         .kb-result-item p { margin:12px 0; line-height:1.7; color:#555; }
@@ -1137,6 +1217,11 @@ public function print_tree($cats, $parent, $table, $home_url) {
         #kb-cat-list th { background:#34495e; color:#fff; }
         .kb-cat-btn-del { padding:4px 8px; background:#e74c3c; color:#fff; border:none; border-radius:3px; cursor:pointer; font-size:12px; }
         .kb-cat-btn-del:hover { background:#c0392b; }
+        .kb-status-badge { display:inline-flex; align-items:center; gap:6px; padding:6px 12px; border-radius:20px; font-weight:700; font-size:13px; }
+        .kb-status-badge--red { background:#fee2e2; color:#b91c1c; }
+        .kb-status-badge--orange { background:#ffedd5; color:#c2410c; }
+        .kb-status-badge--green { background:#dcfce7; color:#15803d; }
+        .kb-meta-status { margin:6px 0 14px; }
         </style>
         
         <script>
