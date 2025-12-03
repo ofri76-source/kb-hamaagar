@@ -26,8 +26,9 @@ class KB_KnowledgeBase_Editor {
         add_action('wp_ajax_kb_update_order', [$this, 'ajax_update_order']);
         add_action('wp_ajax_nopriv_kb_update_order', [$this, 'ajax_update_order']);
         add_action('wp_ajax_kb_check_subject', [$this, 'ajax_check_subject']);
-		add_action('wp_ajax_nopriv_kb_check_subject', [$this, 'ajax_check_subject']);
-		add_shortcode('kb_categories_tree', [$this, 'shortcode_tree']);
+                add_action('wp_ajax_nopriv_kb_check_subject', [$this, 'ajax_check_subject']);
+                add_shortcode('kb_categories_tree', [$this, 'shortcode_tree']);
+        add_shortcode('kb_articles_table', [$this, 'articles_table_shortcode']);
 
         add_action('init', [$this, 'disable_cache_for_kb'], 1);
         
@@ -284,6 +285,63 @@ class KB_KnowledgeBase_Editor {
         elseif($status === 1) { $class .= 'kb-status-badge--orange'; $dot = '🟠'; }
         else { $class .= 'kb-status-badge--red'; $dot = '🔴'; }
         return '<span class="'.$class.'">'.$dot.' '.$label.'</span>';
+    }
+
+    private function split_category_parts($category) {
+        $category = trim($category);
+        $parts = preg_split('/--\s*/', $category);
+        $main = isset($parts[0]) ? trim($parts[0]) : '';
+        $sub = isset($parts[1]) ? trim($parts[1]) : '';
+        return [$main, $sub];
+    }
+
+    private function render_article_body($article) {
+        ob_start();
+        ?>
+        <div class="kb-article-body-block">
+            <div class="kb-meta kb-meta-inline">
+                <span class="kb-meta-chip">📁 <?php echo esc_html($article->category); ?></span>
+                <span class="kb-meta-chip">📅 <?php echo esc_html($this->format_hebrew_date($article->created_at)); ?></span>
+                <span class="kb-meta-chip kb-meta-status-chip"><?php echo $this->render_status_badge($article->review_status); ?></span>
+            </div>
+            <?php if($article->short_desc): ?><div class="kb-section"><h3>תיאור קצר</h3><?php echo $article->short_desc; ?></div><?php endif; ?>
+            <?php if($article->technical_desc): ?><div class="kb-section"><h3>תיאור טכני</h3><?php echo $article->technical_desc; ?></div><?php endif; ?>
+            <?php if($article->technical_solution): ?><div class="kb-section"><h3>פתרון טכני</h3><?php echo $article->technical_solution; ?></div><?php endif; ?>
+            <?php if($article->solution_script): ?>
+            <div class="kb-section kb-script-section">
+                <h3>סקריפט פתרון</h3>
+                <pre dir="ltr"><?php echo esc_html($article->solution_script); ?></pre>
+            </div>
+            <?php endif; ?>
+            <?php if($article->solution_files):
+                $files = json_decode($article->solution_files, true);
+                if($files): ?>
+            <div class="kb-section"><h3>קבצים מצורפים</h3>
+                <?php foreach($files as $file): ?>
+                    <a href="<?php echo esc_url($file); ?>" target="_blank" class="kb-download-btn">📥 <?php echo basename($file); ?></a><br>
+                <?php endforeach; ?>
+            </div>
+            <?php endif; endif; ?>
+            <?php if($article->post_check): ?><div class="kb-section"><h3>בדיקת פתרון</h3><?php echo $article->post_check; ?></div><?php endif; ?>
+            <?php if($article->check_script): ?>
+            <div class="kb-section kb-script-section">
+                <h3>סקריפט בדיקה</h3>
+                <pre dir="ltr"><?php echo esc_html($article->check_script); ?></pre>
+            </div>
+            <?php endif; ?>
+            <?php if($article->check_files):
+                $files = json_decode($article->check_files, true);
+                if($files): ?>
+            <div class="kb-section"><h3>קבצי בדיקה</h3>
+                <?php foreach($files as $file): ?>
+                    <a href="<?php echo esc_url($file); ?>" target="_blank" class="kb-download-btn">📥 <?php echo basename($file); ?></a><br>
+                <?php endforeach; ?>
+            </div>
+            <?php endif; endif; ?>
+            <?php if($article->links): ?><div class="kb-section"><h3>קישורים רלוונטיים</h3><?php echo $article->links; ?></div><?php endif; ?>
+        </div>
+        <?php
+        return ob_get_clean();
     }
 
     public function main_page() {
@@ -944,6 +1002,120 @@ public function print_tree($cats, $parent, $table, $home_url) {
         return ob_get_clean();
     }
 
+    public function articles_table_shortcode($atts = []) {
+        global $wpdb;
+        $table = $wpdb->prefix . 'kb_articles';
+
+        $atts = shortcode_atts([
+            'back_url' => '',
+            'source_page' => ''
+        ], $atts, 'kb_articles_table');
+
+        $page_id = get_the_ID();
+        $page_url = $atts['source_page'] ? $atts['source_page'] : get_permalink($page_id);
+        $back_url = $atts['back_url'] ? $atts['back_url'] : (isset($_GET['kb_back']) ? esc_url($_GET['kb_back']) : '');
+
+        $add_article_page = get_page_by_path('add-article');
+        $add_article_url = $add_article_page ? get_permalink($add_article_page->ID) : '';
+
+        $articles = $wpdb->get_results("SELECT * FROM $table WHERE (is_deleted IS NULL OR is_deleted=0) ORDER BY created_at DESC");
+
+        ob_start();
+        ?>
+        <div class="kb-table-view-container">
+            <div class="kb-table-view-header">
+                <h1>טבלת מאמרים</h1>
+                <div class="kb-table-view-actions">
+                    <?php if($back_url): ?><a class="kb-btn kb-btn-grey" href="<?php echo esc_url($back_url); ?>">← חזרה לתצוגת כרטיסים</a><?php endif; ?>
+                    <?php if($page_url): ?><a class="kb-btn kb-btn-secondary" href="<?php echo esc_url($page_url); ?>">↩ חזרה לדף</a><?php endif; ?>
+                    <?php if($add_article_url): ?><a class="kb-btn kb-btn-primary" href="<?php echo esc_url($add_article_url); ?>">➕ הוסף מאמר חדש</a><?php endif; ?>
+                </div>
+            </div>
+
+            <table class="kb-table-view-table">
+                <thead>
+                    <tr>
+                        <th>נושא</th>
+                        <th>קטגוריה ראשית</th>
+                        <th>תת קטגוריה</th>
+                        <th>נבדק</th>
+                    </tr>
+                </thead>
+                <tbody>
+                <?php foreach($articles as $article):
+                    list($main_cat, $sub_cat) = $this->split_category_parts($article->category);
+                    $article_url = add_query_arg(['page_id'=>$page_id,'kb_article'=>$article->id], home_url('/'));
+                ?>
+                    <tr class="kb-table-row" data-article-id="<?php echo intval($article->id); ?>">
+                        <td><?php echo esc_html($article->subject); ?></td>
+                        <td><?php echo esc_html($main_cat); ?></td>
+                        <td><?php echo esc_html($sub_cat); ?></td>
+                        <td><?php echo $this->render_status_badge($article->review_status); ?></td>
+                    </tr>
+                    <tr class="kb-table-row-detail" data-article-id="<?php echo intval($article->id); ?>" style="display:none;">
+                        <td colspan="4">
+                            <div class="kb-detail-row-content">
+                                <div class="kb-detail-row-header">
+                                    <h3><?php echo esc_html($article->subject); ?></h3>
+                                    <div class="kb-detail-row-buttons">
+                                        <a class="kb-btn kb-btn-secondary" href="<?php echo esc_url($article_url); ?>">פתח מאמר</a>
+                                        <?php if($back_url): ?><a class="kb-btn kb-btn-grey" href="<?php echo esc_url($back_url); ?>">↩ חזרה</a><?php endif; ?>
+                                    </div>
+                                </div>
+                                <?php echo $this->render_article_body($article); ?>
+                            </div>
+                        </td>
+                    </tr>
+                <?php endforeach; ?>
+                </tbody>
+            </table>
+        </div>
+        <style>
+        .kb-table-view-container { width:100%; max-width:100%; margin:20px auto; padding:10px; box-sizing:border-box; font-family:Arial,sans-serif; }
+        .kb-table-view-container .kb-btn { padding:10px 18px; border:none; border-radius:5px; cursor:pointer; text-decoration:none; display:inline-block; font-size:15px; font-weight:600; transition:all 0.3s; color:#fff; }
+        .kb-table-view-container .kb-btn-primary { background:#3498db; }
+        .kb-table-view-container .kb-btn-primary:hover { background:#2980b9; }
+        .kb-table-view-container .kb-btn-secondary { background:#95a5a6; }
+        .kb-table-view-container .kb-btn-secondary:hover { background:#7f8c8d; }
+        .kb-table-view-header { display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:15px; }
+        .kb-table-view-header h1 { margin:0; color:#2c3e50; }
+        .kb-table-view-actions { display:flex; gap:8px; flex-wrap:wrap; }
+        .kb-btn-grey { background:#7f8c8d; color:#fff; }
+        .kb-btn-grey:hover { background:#707b7c; color:#fff; }
+        .kb-table-view-table { width:100%; border-collapse:collapse; background:#fff; box-shadow:0 2px 6px rgba(0,0,0,0.08); }
+        .kb-table-view-table th, .kb-table-view-table td { padding:14px 12px; border-bottom:1px solid #e6e6e6; text-align:right; }
+        .kb-table-view-table th { background:#f4f6f7; color:#2c3e50; font-weight:700; }
+        .kb-table-row { cursor:pointer; }
+        .kb-table-row:hover { background:#f9fbff; }
+        .kb-table-row-detail td { background:#f7f9fa; }
+        .kb-detail-row-content { padding:12px; }
+        .kb-detail-row-header { display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:12px; }
+        .kb-detail-row-header h3 { margin:0; color:#2c3e50; }
+        .kb-detail-row-buttons { display:flex; gap:8px; flex-wrap:wrap; }
+        .kb-article-body-block .kb-section { margin:18px 0; padding:16px; background:#ececec; border-right:5px solid #3498db; border-radius:7px; }
+        .kb-article-body-block .kb-section h3 { margin-top:0; color:#34495e; }
+        .kb-article-body-block pre { background:transparent; padding:12px 0; border:none; white-space:pre-wrap; direction:ltr; text-align:left; font-family:"Courier New",Consolas,monospace; font-size:14px; line-height:1.5; }
+        .kb-meta-inline { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:10px; }
+        .kb-meta-chip { background:#eef2f5; padding:6px 10px; border-radius:6px; color:#34495e; font-weight:600; }
+        .kb-meta-status-chip .kb-status-badge { margin:0; }
+        </style>
+        <script>
+        document.addEventListener('DOMContentLoaded', function(){
+            document.querySelectorAll('.kb-table-row').forEach(function(row){
+                row.addEventListener('click', function(){
+                    var id = this.getAttribute('data-article-id');
+                    var detail = document.querySelector('.kb-table-row-detail[data-article-id="'+id+'"]');
+                    if(detail){
+                        detail.style.display = (detail.style.display === 'none' || detail.style.display === '') ? 'table-row' : 'none';
+                    }
+                });
+            });
+        });
+        </script>
+        <?php
+        return ob_get_clean();
+    }
+
     public function home_page_shortcode() {
         global $wpdb;
         $table = $wpdb->prefix . 'kb_articles';
@@ -952,9 +1124,18 @@ public function print_tree($cats, $parent, $table, $home_url) {
         $search = isset($_GET['kbs']) ? sanitize_text_field($_GET['kbs']) : '';
         $cat_filter = isset($_GET['kbcat']) ? sanitize_text_field($_GET['kbcat']) : '';
         $article_id = isset($_GET['kb_article']) ? intval($_GET['kb_article']) : 0;
-        
+
         $page_id = get_the_ID();
         $page_url = get_permalink($page_id);
+
+        $is_table_view = isset($_GET['kb_table']) && $_GET['kb_table'] == '1';
+        if($is_table_view) {
+            $back_to_cards = remove_query_arg('kb_table', $page_url);
+            return $this->articles_table_shortcode([
+                'back_url' => $back_to_cards,
+                'source_page' => $page_url
+            ]);
+        }
         
         if($article_id > 0){
             $article = $wpdb->get_row($wpdb->prepare("SELECT * FROM $table WHERE (is_deleted IS NULL OR is_deleted=0) AND id=%d", $article_id));
@@ -1064,7 +1245,8 @@ public function print_tree($cats, $parent, $table, $home_url) {
         
         $add_article_page = get_page_by_path('add-article');
         $add_article_url = $add_article_page ? get_permalink($add_article_page->ID) : home_url('/add-article/');
-        
+        $table_view_url = add_query_arg(['page_id' => $page_id, 'kb_table' => 1], home_url('/'));
+
         ob_start();
         ?>
         <div class="kb-home-container">
@@ -1072,6 +1254,7 @@ public function print_tree($cats, $parent, $table, $home_url) {
                 <h1>המאגר</h1>
                 <div class="kb-home-actions">
                     <a href="<?php echo esc_url($add_article_url); ?>" class="kb-btn kb-btn-primary">➕ הוסף מאמר חדש</a>
+                    <a href="<?php echo esc_url($table_view_url); ?>" class="kb-btn kb-btn-outline">📊 תצוגת טבלה</a>
                     <button type="button" id="kb-toggle-cats" class="kb-btn kb-btn-secondary">📁 עיון לפי קטגוריות</button>
                     <button type="button" id="kb-open-cat-popup" class="kb-btn kb-btn-warning">⚙️ ערוך קטגוריות</button>
                 </div>
@@ -1168,13 +1351,15 @@ public function print_tree($cats, $parent, $table, $home_url) {
         </div>
         
         <style>
-        .kb-home-container { max-width:900px; margin:30px auto; padding:20px; font-family:Arial,sans-serif; }
+        .kb-home-container { max-width:100%; width:100%; margin:30px auto; padding:20px 10px; font-family:Arial,sans-serif; box-sizing:border-box; }
         .kb-home-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:25px; flex-wrap:wrap; gap:15px; }
         .kb-home-header h1 { margin:0; color:#2c3e50; }
         .kb-home-actions { display:flex; gap:10px; flex-wrap:wrap; }
         .kb-btn { padding:10px 20px; border:none; border-radius:5px; cursor:pointer; text-decoration:none; display:inline-block; font-size:15px; font-weight:600; transition:all 0.3s; color:#fff; }
         .kb-btn-primary { background:#3498db; }
         .kb-btn-primary:hover { background:#2980b9; }
+        .kb-btn-outline { background:#fff; color:#3498db; border:2px solid #3498db; }
+        .kb-btn-outline:hover { background:#3498db; color:#fff; }
         .kb-btn-secondary { background:#95a5a6; }
         .kb-btn-secondary:hover { background:#7f8c8d; }
         .kb-btn-warning { background:#f39c12; }
