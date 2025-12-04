@@ -27,9 +27,10 @@ class KB_KnowledgeBase_Editor {
         add_action('wp_ajax_nopriv_kb_update_order', [$this, 'ajax_update_order']);
         add_action('wp_ajax_kb_check_subject', [$this, 'ajax_check_subject']);
                 add_action('wp_ajax_nopriv_kb_check_subject', [$this, 'ajax_check_subject']);
-                add_shortcode('kb_categories_tree', [$this, 'shortcode_tree']);
+        add_shortcode('kb_categories_tree', [$this, 'shortcode_tree']);
         add_shortcode('kb_articles_table', [$this, 'articles_table_shortcode']);
         add_shortcode('kb_trash_bin', [$this, 'trash_bin_shortcode']);
+        add_shortcode('kb_archive_bin', [$this, 'archive_bin_shortcode']);
 
         add_action('init', [$this, 'disable_cache_for_kb'], 1);
         
@@ -93,6 +94,7 @@ class KB_KnowledgeBase_Editor {
             user_rating TINYINT(3) DEFAULT NULL,
             vulnerability_level TINYINT(1) DEFAULT NULL,
             review_status TINYINT(1) NOT NULL DEFAULT 0,
+            is_archived TINYINT(1) NOT NULL DEFAULT 0,
             is_deleted TINYINT(1) NOT NULL DEFAULT 0,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP
         ) $charset_collate;";
@@ -126,6 +128,10 @@ class KB_KnowledgeBase_Editor {
         $cols5 = $wpdb->get_results("SHOW COLUMNS FROM $table LIKE 'is_deleted'");
         if(empty($cols5)) {
             $wpdb->query("ALTER TABLE $table ADD COLUMN is_deleted TINYINT(1) NOT NULL DEFAULT 0 AFTER review_status");
+        }
+        $cols5b = $wpdb->get_results("SHOW COLUMNS FROM $table LIKE 'is_archived'");
+        if(empty($cols5b)) {
+            $wpdb->query("ALTER TABLE $table ADD COLUMN is_archived TINYINT(1) NOT NULL DEFAULT 0 AFTER is_deleted");
         }
         $cols6 = $wpdb->get_results("SHOW COLUMNS FROM $table LIKE 'user_rating'");
         if(empty($cols6)) {
@@ -283,11 +289,19 @@ class KB_KnowledgeBase_Editor {
     }
 
     private function render_navigation_bar($active = '') {
+        $home_url = 'https://kb.macomp.co.il/?page_id=10852';
+        $table_url = 'https://kb.macomp.co.il/?page_id=10852&kb_table=1';
+        $trash_url = 'https://kb.macomp.co.il/?page_id=14309';
+        $categories_url = 'https://kb.macomp.co.il/?page_id=11102';
+        $archive_page = get_page_by_path('archive-bin');
+        $archive_url = $archive_page ? get_permalink($archive_page->ID) : 'https://kb.macomp.co.il/?page_id=20000';
+
         $links = [
-            'home' => ['label' => 'ראשי', 'url' => 'https://kb.macomp.co.il/?page_id=10852'],
-            'table' => ['label' => 'טבלה', 'url' => 'https://kb.macomp.co.il/?page_id=14307'],
-            'trash' => ['label' => 'סל מחזור', 'url' => 'https://kb.macomp.co.il/?page_id=14309'],
-            'categories' => ['label' => 'קטגוריות', 'url' => 'https://kb.macomp.co.il/?page_id=11102'],
+            'home' => ['label' => 'ראשי', 'url' => $home_url],
+            'table' => ['label' => 'טבלה', 'url' => $table_url],
+            'archive' => ['label' => 'ארכיון', 'url' => $archive_url],
+            'trash' => ['label' => 'סל מחזור', 'url' => $trash_url],
+            'categories' => ['label' => 'קטגוריות', 'url' => $categories_url],
         ];
 
         ob_start();
@@ -299,7 +313,7 @@ class KB_KnowledgeBase_Editor {
         </div>
         <style>
         .kb-nav-bar { display:flex; justify-content:flex-start; gap:10px; flex-wrap:wrap; margin:0 0 15px 0; padding:0 5px; box-sizing:border-box; }
-        .kb-nav-btn { display:inline-block; padding:10px 18px; border-radius:999px; background:#fff; color:#2563eb; text-decoration:none; font-weight:800; border:1.4px solid #cbd5f5; box-shadow:0 8px 18px rgba(37,99,235,0.08); transition:all .15s; }
+        .kb-nav-btn { display:inline-block; padding:7px 13px; border-radius:999px; background:#fff; color:#2563eb; text-decoration:none; font-weight:800; border:1.4px solid #cbd5f5; box-shadow:0 8px 18px rgba(37,99,235,0.08); transition:all .15s; }
         .kb-nav-btn:hover { background:#2563eb; color:#fff; box-shadow:0 12px 24px rgba(37,99,235,0.18); transform:translateY(-1px); }
         .kb-nav-btn.is-active { background:#2563eb; color:#fff; border-color:#2563eb; box-shadow:0 12px 24px rgba(37,99,235,0.22); }
         </style>
@@ -455,10 +469,16 @@ class KB_KnowledgeBase_Editor {
         global $wpdb; $table = $wpdb->prefix . 'kb_articles';
 
         if($action === 'trash' && $article_id){
-            $wpdb->update($table, ['is_deleted'=>1], ['id'=>$article_id], ['%d'], ['%d']);
+            $wpdb->update($table, ['is_deleted'=>1, 'is_archived'=>0], ['id'=>$article_id], ['%d','%d'], ['%d']);
+        }
+        elseif($action === 'archive' && $article_id){
+            $wpdb->update($table, ['is_archived'=>1, 'is_deleted'=>0], ['id'=>$article_id], ['%d','%d'], ['%d']);
+        }
+        elseif($action === 'unarchive' && $article_id){
+            $wpdb->update($table, ['is_archived'=>0], ['id'=>$article_id], ['%d'], ['%d']);
         }
         elseif($action === 'restore' && $article_id){
-            $wpdb->update($table, ['is_deleted'=>0], ['id'=>$article_id], ['%d'], ['%d']);
+            $wpdb->update($table, ['is_deleted'=>0, 'is_archived'=>0], ['id'=>$article_id], ['%d','%d'], ['%d']);
         }
         elseif($action === 'delete' && $article_id){
             $wpdb->delete($table, ['id'=>$article_id]);
@@ -471,6 +491,31 @@ class KB_KnowledgeBase_Editor {
         $target = remove_query_arg(['kb_pub_action','article_id','_wpnonce'], $target);
         wp_safe_redirect($target);
         exit;
+    }
+
+    private function process_table_bulk_actions($redirect_url = '') {
+        if($_SERVER['REQUEST_METHOD'] !== 'POST') return;
+        if(!isset($_POST['kb_bulk_action']) || !current_user_can('manage_options')) return;
+        check_admin_referer('kb_bulk_action');
+
+        $action = sanitize_key($_POST['kb_bulk_action']);
+        $ids = isset($_POST['kb_selected']) ? array_map('intval', (array)$_POST['kb_selected']) : [];
+        $ids = array_filter($ids);
+        if(empty($ids)) return;
+
+        global $wpdb; $table = $wpdb->prefix . 'kb_articles';
+        $id_list = implode(',', $ids);
+
+        if($action === 'trash_bulk') {
+            $wpdb->query("UPDATE $table SET is_deleted=1, is_archived=0 WHERE id IN ($id_list)");
+        } elseif($action === 'archive_bulk') {
+            $wpdb->query("UPDATE $table SET is_archived=1, is_deleted=0 WHERE id IN ($id_list)");
+        }
+
+        if($redirect_url) {
+            wp_safe_redirect($redirect_url);
+            exit;
+        }
     }
 
     public function main_page() {
@@ -495,7 +540,7 @@ class KB_KnowledgeBase_Editor {
         }
 
         $search = isset($_GET['q']) ? sanitize_text_field($_GET['q']) : '';
-        $sql = "SELECT * FROM $table WHERE ".($view_trash ? "is_deleted=1" : "(is_deleted IS NULL OR is_deleted=0)");
+        $sql = "SELECT * FROM $table WHERE ".($view_trash ? "is_deleted=1" : "(is_deleted IS NULL OR is_deleted=0) AND (is_archived IS NULL OR is_archived=0)");
         if ($search !== '') {
             $like = '%' . $wpdb->esc_like($search) . '%';
             $sql .= $wpdb->prepare(
@@ -558,7 +603,7 @@ public function print_tree($cats, $parent, $table, $home_url) {
     foreach ($cats as $c) {
         if($c->parent_id == $parent) {
             echo "<li style='margin:12px 0;'><span style='font-weight:bold;color:#34495e;font-size:1.13em'>" . esc_html($c->category_name) . "</span>";
-            $articles = $wpdb->get_results($wpdb->prepare("SELECT id, subject FROM $table WHERE (is_deleted IS NULL OR is_deleted=0) AND category LIKE %s ORDER BY subject", '%'.$wpdb->esc_like($c->category_name).'%'));
+            $articles = $wpdb->get_results($wpdb->prepare("SELECT id, subject FROM $table WHERE (is_deleted IS NULL OR is_deleted=0) AND (is_archived IS NULL OR is_archived=0) AND category LIKE %s ORDER BY subject", '%'.$wpdb->esc_like($c->category_name).'%'));
             if($articles) {
                 echo "<ul style='margin-top:2px;'>";
                 foreach($articles as $a){
@@ -1182,13 +1227,16 @@ public function print_tree($cats, $parent, $table, $home_url) {
         $back_url = $atts['back_url'] ? $atts['back_url'] : (isset($_GET['kb_back']) ? esc_url($_GET['kb_back']) : '');
 
         $this->handle_public_article_action($page_url);
+        $this->process_table_bulk_actions($page_url);
 
         $add_article_page = get_page_by_path('add-article');
         $add_article_url = $add_article_page ? get_permalink($add_article_page->ID) : '';
         $trash_page = get_page_by_path('trash-bin');
         $trash_url = $trash_page ? get_permalink($trash_page->ID) : '';
+        $archive_page = get_page_by_path('archive-bin');
+        $archive_url = $archive_page ? get_permalink($archive_page->ID) : '';
 
-        $articles = $wpdb->get_results("SELECT * FROM $table WHERE (is_deleted IS NULL OR is_deleted=0) ORDER BY created_at DESC");
+        $articles = $wpdb->get_results("SELECT * FROM $table WHERE (is_deleted IS NULL OR is_deleted=0) AND (is_archived IS NULL OR is_archived=0) ORDER BY created_at DESC");
         $status_labels = $this->get_status_labels();
         ob_start();
         ?>
@@ -1200,18 +1248,28 @@ public function print_tree($cats, $parent, $table, $home_url) {
                 <div class="kb-table-view-actions">
                     <?php if($back_url): ?><a class="kb-btn kb-btn-grey" href="<?php echo esc_url($back_url); ?>">← חזרה לתצוגת כרטיסים</a><?php endif; ?>
                     <?php if($add_article_url): ?><a class="kb-btn kb-btn-primary" href="<?php echo esc_url($add_article_url); ?>">➕ הוסף מאמר חדש</a><?php endif; ?>
+                    <?php if($archive_url): ?><a class="kb-btn kb-btn-secondary" href="<?php echo esc_url($archive_url); ?>">📦 ארכיון</a><?php endif; ?>
                     <?php if($trash_url): ?><a class="kb-btn kb-btn-danger" href="<?php echo esc_url($trash_url); ?>">🗑️ סל מחזור</a><?php endif; ?>
                 </div>
             </div>
 
+            <form method="post" class="kb-bulk-form">
+            <?php wp_nonce_field('kb_bulk_action'); ?>
             <div class="kb-table-search">
                 <input type="text" id="kb-table-search" placeholder="חיפוש לפי נושא..." aria-label="חיפוש לפי נושא">
                 <button type="button" id="kb-table-search-clear">נקה</button>
+                <?php if(current_user_can('manage_options')): ?>
+                    <div class="kb-bulk-actions">
+                        <button type="submit" class="kb-btn kb-btn-danger" name="kb_bulk_action" value="trash_bulk">🗑️ מחיקה קבוצתית</button>
+                        <button type="submit" class="kb-btn kb-btn-secondary" name="kb_bulk_action" value="archive_bulk">📦 העברה לארכיון</button>
+                    </div>
+                <?php endif; ?>
             </div>
 
             <table class="kb-table-view-table">
                 <thead>
                     <tr>
+                        <th class="kb-select-col"><input type="checkbox" id="kb-select-all"></th>
                         <th class="kb-sortable" data-sort-key="subject">
                             <div class="kb-th-inner">
                                 <span>נושא</span>
@@ -1276,6 +1334,7 @@ public function print_tree($cats, $parent, $table, $home_url) {
                     $status_label = isset($status_labels[$article->review_status]) ? $status_labels[$article->review_status] : '';
                 ?>
                     <tr class="kb-table-row" data-article-id="<?php echo intval($article->id); ?>" data-subject="<?php echo esc_attr(mb_strtolower($article->subject)); ?>" data-subject-label="<?php echo esc_attr($article->subject); ?>" data-maincat="<?php echo esc_attr(mb_strtolower($main_cat)); ?>" data-maincat-label="<?php echo esc_attr($main_cat); ?>" data-subcat="<?php echo esc_attr(mb_strtolower($sub_cat)); ?>" data-subcat-label="<?php echo esc_attr($sub_cat); ?>" data-status="<?php echo intval($article->review_status); ?>" data-status-label="<?php echo esc_attr($status_label); ?>" data-rating="<?php echo is_null($rating_value) ? '' : intval($rating_value); ?>" data-execution="<?php echo $execution_mode==='אוטומטי' ? 'auto' : 'manual'; ?>" data-execution-label="<?php echo esc_attr($execution_mode); ?>" data-vulnerability="<?php echo $vulnerability_level ? intval($vulnerability_level) : ''; ?>" data-vulnerability-label="<?php echo esc_attr($vulnerability_label); ?>">
+                        <td><?php if(current_user_can('manage_options')): ?><input type="checkbox" name="kb_selected[]" value="<?php echo intval($article->id); ?>" class="kb-row-select"><?php endif; ?></td>
                         <td><?php echo esc_html($article->subject); ?></td>
                         <td><?php echo esc_html($main_cat); ?></td>
                         <td><?php echo esc_html($sub_cat); ?></td>
@@ -1285,7 +1344,7 @@ public function print_tree($cats, $parent, $table, $home_url) {
                         <td><?php echo $vulnerability_label ? esc_html($vulnerability_label) : ''; ?></td>
                     </tr>
                     <tr class="kb-table-row-detail" data-article-id="<?php echo intval($article->id); ?>" style="display:none;">
-                        <td colspan="7">
+                        <td colspan="8">
                             <div class="kb-detail-row-content">
                                 <div class="kb-detail-row-header">
                                     <h3><?php echo esc_html($article->subject); ?></h3>
@@ -1293,6 +1352,9 @@ public function print_tree($cats, $parent, $table, $home_url) {
                                 <div class="kb-detail-row-buttons">
                                     <?php if($edit_url): ?><a class="kb-btn kb-btn-secondary" href="<?php echo esc_url($edit_url); ?>">✏️ עריכה</a><?php endif; ?>
                                     <?php if($trash_link): ?><a class="kb-btn kb-btn-danger" href="<?php echo esc_url($trash_link); ?>" onclick="return confirm('להעביר את המאמר לסל מחזור?');">🗑️ מחיקה</a><?php endif; ?>
+                                    <?php if(current_user_can('manage_options')): $archive_link = wp_nonce_url(add_query_arg(['page_id'=>$page_id,'kb_pub_action'=>'archive','article_id'=>$article->id], $page_url), 'kb_pub_action_'.$article->id); ?>
+                                        <a class="kb-btn kb-btn-secondary" href="<?php echo esc_url($archive_link); ?>">📦 ארכיון</a>
+                                    <?php endif; ?>
                                     <a class="kb-btn kb-btn-secondary" href="<?php echo esc_url($article_url); ?>">פתח מאמר</a>
                                 </div>
                                 <div class="kb-detail-row-meta">
@@ -1308,25 +1370,27 @@ public function print_tree($cats, $parent, $table, $home_url) {
                 <?php endforeach; ?>
                 </tbody>
             </table>
+            </form>
         </div>
         </div>
         <style>
         .kb-table-view-container { width:100%; max-width:100%; margin:20px auto; padding:10px; box-sizing:border-box; font-family:Arial,sans-serif; }
-        .kb-table-view-container .kb-btn { padding:10px 18px; border-radius:14px; border:1.6px solid #cbd5e1; cursor:pointer; text-decoration:none; display:inline-flex; align-items:center; gap:6px; font-size:15px; font-weight:800; transition:all 0.2s; color:#0f172a; background:#f1f5f9; box-shadow:0 6px 14px rgba(15,23,42,0.10); }
+        .kb-table-view-container .kb-btn { padding:7px 13px; border-radius:14px; border:1.6px solid #cbd5e1; cursor:pointer; text-decoration:none; display:inline-flex; align-items:center; gap:6px; font-size:15px; font-weight:800; transition:all 0.2s; color:#0f172a; background:#f1f5f9; box-shadow:0 6px 14px rgba(15,23,42,0.10); }
         .kb-table-view-container .kb-btn-primary { background:#2563eb; color:#fff; border-color:#1d4ed8; box-shadow:0 10px 22px rgba(37,99,235,0.22); }
         .kb-table-view-container .kb-btn-secondary { background:#fff; color:#0f172a; border-color:#cbd5e1; box-shadow:0 8px 18px rgba(15,23,42,0.10); }
         .kb-table-view-container .kb-btn-danger { background:#dc2626; color:#fff; border-color:#b91c1c; box-shadow:0 10px 22px rgba(220,38,38,0.20); }
         .kb-table-view-header { display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:15px; }
         .kb-table-view-header h1 { margin:0; color:#2c3e50; }
         .kb-table-view-actions { display:flex; gap:8px; flex-wrap:wrap; }
-        .kb-table-search { display:flex; gap:8px; align-items:center; margin:0 0 10px 0; }
-        .kb-table-search input { padding:10px 12px; border:1px solid #cbd5e1; border-radius:8px; min-width:220px; font-size:15px; }
-        .kb-table-search button { padding:10px 14px; border:none; border-radius:8px; background:#e2e8f0; cursor:pointer; font-weight:700; color:#0f172a; }
+        .kb-table-search { display:flex; gap:8px; align-items:center; margin:0 0 10px 0; flex-wrap:wrap; }
+        .kb-table-search input { padding:8px 10px; border:1px solid #cbd5e1; border-radius:8px; min-width:220px; font-size:15px; }
+        .kb-table-search button { padding:7px 12px; border:none; border-radius:8px; background:#e2e8f0; cursor:pointer; font-weight:700; color:#0f172a; }
         .kb-table-search button:hover { background:#cbd5e1; }
+        .kb-bulk-actions { display:flex; gap:8px; flex-wrap:wrap; }
         .kb-btn-grey { background:#fff; color:#1f2937; border-color:#d1d5db; box-shadow:0 8px 18px rgba(15,23,42,0.08); }
         .kb-btn-grey:hover { background:#1f2937; color:#fff; border-color:#1f2937; }
         .kb-table-view-table { width:100%; border-collapse:collapse; background:#fff; box-shadow:0 2px 6px rgba(0,0,0,0.08); }
-        .kb-table-view-table th, .kb-table-view-table td { padding:14px 12px; border-bottom:1px solid #e6e6e6; text-align:right; }
+        .kb-table-view-table th, .kb-table-view-table td { padding:12px 10px; border-bottom:1px solid #e6e6e6; text-align:right; }
         .kb-table-view-table th { background:#f4f6f7; color:#2c3e50; font-weight:700; position:relative; }
         .kb-sortable { cursor:pointer; position:relative; }
         .kb-sortable[data-sort-dir="asc"]::after { content:"▲"; font-size:0.75em; margin-right:6px; color:#475569; }
@@ -1345,6 +1409,7 @@ public function print_tree($cats, $parent, $table, $home_url) {
         .kb-table-row { cursor:pointer; }
         .kb-table-row:hover { background:#f9fbff; }
         .kb-table-row-detail td { background:#f7f9fa; }
+        .kb-select-col { width:42px; }
         .kb-detail-row-content { padding:12px; }
         .kb-detail-row-header { display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:6px; }
         .kb-detail-row-header h3 { margin:0; color:#2c3e50; }
@@ -1366,14 +1431,178 @@ public function print_tree($cats, $parent, $table, $home_url) {
         </style>
         <script>
         document.addEventListener('DOMContentLoaded', function(){
-            document.querySelectorAll('.kb-table-row').forEach(function(row){
-                row.addEventListener('click', function(e){
-                    if(e.target.closest('a, button, input, select, textarea')) return;
+            var tableRows = Array.from(document.querySelectorAll('.kb-table-row'));
+            var rowPairs = tableRows.map(function(row){
+                return {
+                    row: row,
+                    detail: document.querySelector('.kb-table-row-detail[data-article-id="'+row.getAttribute('data-article-id')+'"]')
+                };
+            });
 
-                    var id = this.getAttribute('data-article-id');
-                    var detail = document.querySelector('.kb-table-row-detail[data-article-id="'+id+'"]');
-                    if(detail){
-                        detail.style.display = (detail.style.display === 'none' || detail.style.display === '') ? 'table-row' : 'none';
+            var selectAll = document.getElementById('kb-select-all');
+            var rowChecks = Array.from(document.querySelectorAll('.kb-row-select'));
+            var bulkButtons = Array.from(document.querySelectorAll('.kb-bulk-actions button[type="submit"]'));
+
+            function updateBulkState(){
+                var anyChecked = rowChecks.some(function(cbx){ return cbx.checked; });
+                bulkButtons.forEach(function(btn){ btn.disabled = !anyChecked; });
+                if(selectAll){
+                    var visibleChecks = rowChecks.filter(function(cbx){ return cbx.closest('tr') && cbx.closest('tr').style.display !== 'none'; });
+                    var allChecked = visibleChecks.length && visibleChecks.every(function(cbx){ return cbx.checked; });
+                    selectAll.checked = allChecked;
+                }
+            }
+
+            if(selectAll){
+                selectAll.addEventListener('change', function(){
+                    rowChecks.forEach(function(cbx){
+                        if(cbx.closest('tr') && cbx.closest('tr').style.display !== 'none'){
+                            cbx.checked = selectAll.checked;
+                        }
+                    });
+                    updateBulkState();
+                });
+            }
+
+            rowChecks.forEach(function(cbx){
+                cbx.addEventListener('change', updateBulkState);
+            });
+            updateBulkState();
+
+            var filterState = {
+                subjectLabel: new Set(),
+                maincatLabel: new Set(),
+                subcatLabel: new Set(),
+                statusLabel: new Set(),
+                rating: new Set(),
+                executionLabel: new Set(),
+                vulnerabilityLabel: new Set()
+            };
+
+            var activeMenu = null;
+
+            function toggleDetail(row){
+                var id = row.getAttribute('data-article-id');
+                var detail = document.querySelector('.kb-table-row-detail[data-article-id="'+id+'"]');
+                if(detail){
+                    var open = detail.dataset.open === '1';
+                    detail.dataset.open = open ? '0' : '1';
+                    detail.style.display = open ? 'none' : 'table-row';
+                }
+            }
+
+            function matchesSelectedFilters(row){
+                var subjectQuery = (document.getElementById('kb-table-search').value || '').trim().toLowerCase();
+                var subjectValue = (row.dataset.subject || '').toLowerCase();
+                if(subjectQuery && subjectValue.indexOf(subjectQuery) === -1) return false;
+
+                return Object.keys(filterState).every(function(key){
+                    var selected = filterState[key];
+                    if(!selected || selected.size === 0) return true;
+                    var val = row.dataset[key] || '';
+                    return val && selected.has(val);
+                });
+            }
+
+            function applyFilters(){
+                rowPairs.forEach(function(pair){
+                    var visible = matchesSelectedFilters(pair.row);
+                    pair.row.style.display = visible ? '' : 'none';
+                    if(pair.detail){
+                        if(!visible){
+                            pair.detail.style.display = 'none';
+                            pair.detail.dataset.open = '0';
+                        } else if(pair.detail.dataset.open === '1'){
+                            pair.detail.style.display = 'table-row';
+                        }
+                    }
+                });
+                updateBulkState();
+            }
+
+            function closeMenus(exceptKey){
+                document.querySelectorAll('.kb-filter-menu').forEach(function(menu){
+                    if(exceptKey && menu.dataset.filterMenu === exceptKey){
+                        return;
+                    }
+                    menu.classList.remove('is-open');
+                });
+                activeMenu = exceptKey || null;
+            }
+
+            function renderMenuOptions(menu, key){
+                menu.innerHTML = '';
+                var values = [];
+                rowPairs.forEach(function(pair){
+                    var value = pair.row.dataset[key] || '';
+                    if(value && values.indexOf(value) === -1){
+                        values.push(value);
+                    }
+                });
+                if(key === 'rating'){
+                    values.sort(function(a,b){ return parseInt(a,10) - parseInt(b,10); });
+                } else {
+                    values.sort(function(a,b){ return a.localeCompare(b, 'he'); });
+                }
+
+                values.forEach(function(val){
+                    var option = document.createElement('label');
+                    option.className = 'kb-filter-option';
+                    var input = document.createElement('input');
+                    input.type = 'checkbox';
+                    input.value = val;
+                    input.checked = filterState[key] && filterState[key].has(val);
+                    input.addEventListener('change', function(){
+                        if(!filterState[key]) filterState[key] = new Set();
+                        if(this.checked){
+                            filterState[key].add(val);
+                        } else {
+                            filterState[key].delete(val);
+                        }
+                        applyFilters();
+                    });
+                    var text = document.createElement('span');
+                    text.textContent = val;
+                    option.appendChild(input);
+                    option.appendChild(text);
+                    menu.appendChild(option);
+                });
+
+                var actions = document.createElement('div');
+                actions.className = 'kb-filter-actions';
+                var clearBtn = document.createElement('button');
+                clearBtn.type = 'button';
+                clearBtn.textContent = 'נקה';
+                clearBtn.addEventListener('click', function(){
+                    filterState[key] = new Set();
+                    renderMenuOptions(menu, key);
+                    applyFilters();
+                });
+                actions.appendChild(clearBtn);
+                menu.appendChild(actions);
+            }
+
+            var sortState = { field: 'subject', dir: 'asc' };
+
+            function getSortValue(row, field){
+                var val = row.dataset[field] || '';
+                if(field === 'rating'){
+                    return val === '' ? -Infinity : parseInt(val, 10);
+                }
+                if(field === 'status' || field === 'vulnerability'){
+                    return val === '' ? -Infinity : parseInt(val, 10);
+                }
+                if(field === 'execution'){
+                    return val === 'auto' ? 1 : 0;
+                }
+                return val;
+            }
+
+            function updateSortIndicators(){
+                document.querySelectorAll('.kb-sortable').forEach(function(th){
+                    th.dataset.sortDir = '';
+                    if(th.dataset.sortKey === sortState.field){
+                        th.dataset.sortDir = sortState.dir;
                     }
                 });
             }
@@ -1505,11 +1734,12 @@ public function print_tree($cats, $parent, $table, $home_url) {
                 </div>
             </div>
 
-            <table class="kb-table-view-table">
+            <table class="kb-table-view-table" id="kb-trash-table">
                 <thead>
                     <tr>
-                        <th>נושא</th>
-                        <th>קטגוריה</th>
+                        <th class="kb-sortable" data-sort="subject">נושא</th>
+                        <th>קטגוריה ראשית</th>
+                        <th>תת קטגוריה</th>
                         <th>נבדק</th>
                         <th>תאריך</th>
                         <th>פעולות</th>
@@ -1517,15 +1747,17 @@ public function print_tree($cats, $parent, $table, $home_url) {
                 </thead>
                 <tbody>
                     <?php if(empty($articles)): ?>
-                        <tr><td colspan="5" style="text-align:center; padding:20px;">אין פריטים בסל המחזור.</td></tr>
+                        <tr><td colspan="6" style="text-align:center; padding:20px;">אין פריטים בסל המחזור.</td></tr>
                     <?php endif; ?>
                     <?php foreach($articles as $article):
+                        list($main_cat, $sub_cat) = $this->split_category_parts($article->category);
                         $restore = wp_nonce_url(add_query_arg(['page_id'=>$page_id,'kb_pub_action'=>'restore','article_id'=>$article->id], $page_url), 'kb_pub_action_'.$article->id);
                         $delete = wp_nonce_url(add_query_arg(['page_id'=>$page_id,'kb_pub_action'=>'delete','article_id'=>$article->id], $page_url), 'kb_pub_action_'.$article->id);
                     ?>
-                        <tr>
+                        <tr data-subject="<?php echo esc_attr(mb_strtolower($article->subject)); ?>">
                             <td><?php echo esc_html($article->subject); ?></td>
-                            <td><?php echo esc_html($article->category); ?></td>
+                            <td><?php echo esc_html($main_cat); ?></td>
+                            <td><?php echo esc_html($sub_cat); ?></td>
                             <td><?php echo $this->render_status_badge($article->review_status); ?></td>
                             <td><?php echo esc_html($this->format_hebrew_date($article->created_at)); ?></td>
                             <td>
@@ -1542,7 +1774,7 @@ public function print_tree($cats, $parent, $table, $home_url) {
         </div>
         <style>
         .kb-table-view-container { width:100%; max-width:100%; margin:20px auto; padding:10px; box-sizing:border-box; font-family:Arial,sans-serif; }
-        .kb-table-view-container .kb-btn { padding:10px 18px; border-radius:14px; border:1.6px solid #cbd5e1; cursor:pointer; text-decoration:none; display:inline-flex; align-items:center; gap:6px; font-size:15px; font-weight:800; transition:all 0.2s; color:#0f172a; background:#f1f5f9; box-shadow:0 6px 14px rgba(15,23,42,0.10); }
+        .kb-table-view-container .kb-btn { padding:7px 13px; border-radius:14px; border:1.6px solid #cbd5e1; cursor:pointer; text-decoration:none; display:inline-flex; align-items:center; gap:6px; font-size:15px; font-weight:800; transition:all 0.2s; color:#0f172a; background:#f1f5f9; box-shadow:0 6px 14px rgba(15,23,42,0.10); }
         .kb-table-view-container .kb-btn-secondary { background:#fff; color:#0f172a; border-color:#cbd5e1; box-shadow:0 8px 18px rgba(15,23,42,0.10); }
         .kb-table-view-container .kb-btn-grey { background:#fff; color:#1f2937; border-color:#d1d5db; box-shadow:0 8px 18px rgba(15,23,42,0.08); }
         .kb-table-view-container .kb-btn-grey:hover { background:#1f2937; color:#fff; border-color:#1f2937; }
@@ -1552,8 +1784,148 @@ public function print_tree($cats, $parent, $table, $home_url) {
         .kb-table-view-actions { display:flex; gap:8px; flex-wrap:wrap; }
         .kb-table-view-table { width:100%; border-collapse:collapse; background:#fff; box-shadow:0 2px 6px rgba(0,0,0,0.08); }
         .kb-table-view-table th, .kb-table-view-table td { padding:14px 12px; border-bottom:1px solid #e6e6e6; text-align:right; }
-        .kb-table-view-table th { background:#f4f6f7; color:#2c3e50; font-weight:700; }
+        .kb-table-view-table th { background:#f4f6f7; color:#2c3e50; font-weight:700; cursor:pointer; }
         </style>
+        <script>
+        document.addEventListener('DOMContentLoaded', function(){
+            var subjectTh = document.querySelector('#kb-trash-table th[data-sort="subject"]');
+            var tbody = document.querySelector('#kb-trash-table tbody');
+            var dir = 'asc';
+            function sortRows(){
+                var rows = Array.from(tbody.querySelectorAll('tr[data-subject]'));
+                rows.sort(function(a,b){
+                    var av = a.dataset.subject || '';
+                    var bv = b.dataset.subject || '';
+                    if(av === bv) return 0;
+                    return dir === 'asc' ? (av > bv ? 1 : -1) : (av < bv ? 1 : -1);
+                });
+                rows.forEach(function(r){ tbody.appendChild(r); });
+                if(subjectTh){ subjectTh.setAttribute('data-sort-dir', dir); }
+            }
+            if(subjectTh){
+                subjectTh.addEventListener('click', function(){ dir = dir === 'asc' ? 'desc' : 'asc'; sortRows(); });
+                sortRows();
+            }
+        });
+        </script>
+        <?php
+        return ob_get_clean();
+    }
+
+    public function archive_bin_shortcode($atts = []) {
+        global $wpdb; $table = $wpdb->prefix . 'kb_articles';
+
+        $atts = shortcode_atts([
+            'back_url' => '',
+            'table_url' => ''
+        ], $atts, 'kb_archive_bin');
+
+        $page_id = get_the_ID();
+        $page_url = get_permalink($page_id);
+
+        $this->handle_public_article_action($page_url);
+
+        $table_page = get_page_by_path('kb-table');
+        $table_url = $atts['table_url'] ? $atts['table_url'] : ($table_page ? get_permalink($table_page->ID) : '');
+        $back_url = $atts['back_url'];
+
+        $articles = $wpdb->get_results("SELECT * FROM $table WHERE (is_archived=1) AND (is_deleted IS NULL OR is_deleted=0) ORDER BY subject ASC");
+
+        ob_start();
+        ?>
+        <div class="kb-container">
+        <div class="kb-table-view-container">
+            <?php echo $this->render_navigation_bar('archive'); ?>
+            <div class="kb-table-view-header">
+                <h1>ארכיון מאמרים</h1>
+                <div class="kb-table-view-actions">
+                    <?php if($back_url): ?><a class="kb-btn kb-btn-grey" href="<?php echo esc_url($back_url); ?>">↩ חזרה</a><?php endif; ?>
+                    <?php if($table_url): ?><a class="kb-btn kb-btn-secondary" href="<?php echo esc_url($table_url); ?>">📄 חזרה לטבלה</a><?php endif; ?>
+                </div>
+            </div>
+
+            <table class="kb-table-view-table" id="kb-archive-table">
+                <thead>
+                    <tr>
+                        <th class="kb-sortable" data-sort="subject">נושא</th>
+                        <th>קטגוריה ראשית</th>
+                        <th>תת קטגוריה</th>
+                        <th>נבדק</th>
+                        <th>תאריך</th>
+                        <th>פעולות</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php if(empty($articles)): ?>
+                        <tr><td colspan="6" style="text-align:center; padding:20px;">אין פריטים בארכיון.</td></tr>
+                    <?php endif; ?>
+                    <?php foreach($articles as $article):
+                        list($main_cat, $sub_cat) = $this->split_category_parts($article->category);
+                        $unarchive = wp_nonce_url(add_query_arg(['page_id'=>$page_id,'kb_pub_action'=>'unarchive','article_id'=>$article->id], $page_url), 'kb_pub_action_'.$article->id);
+                        $trash = wp_nonce_url(add_query_arg(['page_id'=>$page_id,'kb_pub_action'=>'trash','article_id'=>$article->id], $page_url), 'kb_pub_action_'.$article->id);
+                        $delete = wp_nonce_url(add_query_arg(['page_id'=>$page_id,'kb_pub_action'=>'delete','article_id'=>$article->id], $page_url), 'kb_pub_action_'.$article->id);
+                    ?>
+                        <tr data-subject="<?php echo esc_attr(mb_strtolower($article->subject)); ?>">
+                            <td><?php echo esc_html($article->subject); ?></td>
+                            <td><?php echo esc_html($main_cat); ?></td>
+                            <td><?php echo esc_html($sub_cat); ?></td>
+                            <td><?php echo $this->render_status_badge($article->review_status); ?></td>
+                            <td><?php echo esc_html($this->format_hebrew_date($article->created_at)); ?></td>
+                            <td>
+                                <?php if(current_user_can('manage_options')): ?>
+                                    <a class="kb-btn kb-btn-secondary" href="<?php echo esc_url($unarchive); ?>">↩ החזר</a>
+                                    <a class="kb-btn kb-btn-warning" href="<?php echo esc_url($trash); ?>" onclick="return confirm('להעביר לסל מחזור?');">🗑️ סל מחזור</a>
+                                    <a class="kb-btn kb-btn-danger" href="<?php echo esc_url($delete); ?>" onclick="return confirm('למחוק לצמיתות?');">❌ מחק</a>
+                                <?php endif; ?>
+                            </td>
+                        </tr>
+                    <?php endforeach; ?>
+                </tbody>
+            </table>
+        </div>
+        </div>
+        <style>
+        .kb-table-view-container { width:100%; max-width:100%; margin:20px auto; padding:10px; box-sizing:border-box; font-family:Arial,sans-serif; }
+        .kb-table-view-container .kb-btn { padding:7px 13px; border-radius:14px; border:1.6px solid #cbd5e1; cursor:pointer; text-decoration:none; display:inline-flex; align-items:center; gap:6px; font-size:15px; font-weight:800; transition:all 0.2s; color:#0f172a; background:#f1f5f9; box-shadow:0 6px 14px rgba(15,23,42,0.10); }
+        .kb-table-view-container .kb-btn-secondary { background:#fff; color:#0f172a; border-color:#cbd5e1; box-shadow:0 8px 18px rgba(15,23,42,0.10); }
+        .kb-table-view-container .kb-btn-grey { background:#fff; color:#1f2937; border-color:#d1d5db; box-shadow:0 8px 18px rgba(15,23,42,0.08); }
+        .kb-table-view-container .kb-btn-grey:hover { background:#1f2937; color:#fff; border-color:#1f2937; }
+        .kb-table-view-container .kb-btn-danger { background:#dc2626; color:#fff; border-color:#b91c1c; box-shadow:0 10px 22px rgba(220,38,38,0.20); }
+        .kb-table-view-container .kb-btn-warning { background:#fffbeb; color:#92400e; border-color:#f59e0b; box-shadow:0 8px 18px rgba(252,211,77,0.25); }
+        .kb-table-view-header { display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:15px; }
+        .kb-table-view-header h1 { margin:0; color:#2c3e50; }
+        .kb-table-view-actions { display:flex; gap:8px; flex-wrap:wrap; }
+        .kb-table-view-table { width:100%; border-collapse:collapse; background:#fff; box-shadow:0 2px 6px rgba(0,0,0,0.08); }
+        .kb-table-view-table th, .kb-table-view-table td { padding:14px 10px; border-bottom:1px solid #e6e6e6; text-align:right; }
+        .kb-table-view-table th { background:#f4f6f7; color:#2c3e50; font-weight:700; cursor:pointer; }
+        .kb-table-view-table th[data-sort="subject"]::after { content:'▼'; font-size:10px; margin-right:6px; color:#475569; }
+        .kb-table-view-table th[data-sort-dir="asc"][data-sort="subject"]::after { content:'▲'; }
+        </style>
+        <script>
+        document.addEventListener('DOMContentLoaded', function(){
+            var subjectTh = document.querySelector('#kb-archive-table th[data-sort="subject"]');
+            var tbody = document.querySelector('#kb-archive-table tbody');
+            var dir = 'asc';
+            function sortRows(){
+                var rows = Array.from(tbody.querySelectorAll('tr[data-subject]'));
+                rows.sort(function(a,b){
+                    var av = a.dataset.subject || '';
+                    var bv = b.dataset.subject || '';
+                    if(av === bv) return 0;
+                    return dir === 'asc' ? (av > bv ? 1 : -1) : (av < bv ? 1 : -1);
+                });
+                rows.forEach(function(r){ tbody.appendChild(r); });
+                if(subjectTh){ subjectTh.setAttribute('data-sort-dir', dir); }
+            }
+            if(subjectTh){
+                subjectTh.addEventListener('click', function(){
+                    dir = dir === 'asc' ? 'desc' : 'asc';
+                    sortRows();
+                });
+                sortRows();
+            }
+        });
+        </script>
         <?php
         return ob_get_clean();
     }
@@ -1582,12 +1954,13 @@ public function print_tree($cats, $parent, $table, $home_url) {
         }
         
         if($article_id > 0){
-            $article = $wpdb->get_row($wpdb->prepare("SELECT * FROM $table WHERE (is_deleted IS NULL OR is_deleted=0) AND id=%d", $article_id));
+            $article = $wpdb->get_row($wpdb->prepare("SELECT * FROM $table WHERE (is_deleted IS NULL OR is_deleted=0) AND (is_archived IS NULL OR is_archived=0) AND id=%d", $article_id));
             if(!$article) return '<div class="kb-notfound">❌ מאמר לא נמצא.</div>';
 
             $add_article_page = get_page_by_path('add-article');
             $edit_url = $add_article_page ? add_query_arg('edit_article', $article->id, get_permalink($add_article_page->ID)) : '';
             $trash_link = current_user_can('manage_options') ? wp_nonce_url(add_query_arg(['page_id'=>$page_id,'kb_pub_action'=>'trash','article_id'=>$article->id], $page_url), 'kb_pub_action_'.$article->id) : '';
+            $archive_link = current_user_can('manage_options') ? wp_nonce_url(add_query_arg(['page_id'=>$page_id,'kb_pub_action'=>'archive','article_id'=>$article->id], $page_url), 'kb_pub_action_'.$article->id) : '';
             
             $back_url = add_query_arg('page_id', $page_id, home_url('/'));
             if($search) $back_url = add_query_arg('kbs', $search, $back_url);
@@ -1604,6 +1977,9 @@ public function print_tree($cats, $parent, $table, $home_url) {
                     <?php endif; ?>
                     <?php if($trash_link): ?>
                         <a href="<?php echo esc_url($trash_link); ?>" class="kb-btn-delete" onclick="return confirm('להעביר את המאמר לסל מחזור?');">🗑️ מחיקה</a>
+                    <?php endif; ?>
+                    <?php if($archive_link): ?>
+                        <a href="<?php echo esc_url($archive_link); ?>" class="kb-btn-archive">📦 ארכיון</a>
                     <?php endif; ?>
                     <a href="<?php echo esc_url($back_url); ?>" class="kb-btn-back">← חזרה לרשימה</a>
                 </div>
@@ -1656,6 +2032,9 @@ public function print_tree($cats, $parent, $table, $home_url) {
                     <?php if($trash_link): ?>
                         <a href="<?php echo esc_url($trash_link); ?>" class="kb-btn-delete" onclick="return confirm('להעביר את המאמר לסל מחזור?');">🗑️ מחיקה</a>
                     <?php endif; ?>
+                    <?php if($archive_link): ?>
+                        <a href="<?php echo esc_url($archive_link); ?>" class="kb-btn-archive">📦 ארכיון</a>
+                    <?php endif; ?>
                     <a href="<?php echo esc_url($back_url); ?>" class="kb-btn-back">← חזרה לרשימה</a>
                 </div>
             </div>
@@ -1663,10 +2042,11 @@ public function print_tree($cats, $parent, $table, $home_url) {
             <style>
             .kb-article-header, .kb-article-footer { display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; gap:10px; flex-wrap:wrap; }
             .kb-article-footer { margin-top:30px; margin-bottom:0; }
-            .kb-btn-edit { display:inline-block; padding:10px 20px; background:#f39c12; color:#fff; text-decoration:none; border-radius:5px; font-weight:bold; order:1; }
+            .kb-btn-edit { display:inline-block; padding:7px 14px; background:#f39c12; color:#fff; text-decoration:none; border-radius:5px; font-weight:bold; order:1; }
             .kb-btn-edit:hover { background:#e67e22; }
-            .kb-btn-delete { display:inline-block; padding:10px 20px; background:#e74c3c; color:#fff; text-decoration:none; border-radius:5px; font-weight:bold; }
+            .kb-btn-delete { display:inline-block; padding:7px 14px; background:#e74c3c; color:#fff; text-decoration:none; border-radius:5px; font-weight:bold; }
             .kb-btn-delete:hover { background:#c0392b; }
+            .kb-btn-archive { display:inline-block; padding:7px 14px; background:#2563eb; color:#fff; text-decoration:none; border-radius:5px; font-weight:bold; }
             .kb-single-article { max-width:100%; width:100%; margin:30px auto; padding:30px; background:#fff; border-radius:8px; box-shadow:0 2px 10px rgba(0,0,0,0.1); box-sizing:border-box; }
             .kb-single-article h1 { color:#2c3e50; margin:20px 0 15px; }
             .kb-meta { color:#7f8c8d; margin-bottom:25px; font-size:0.95em; }
@@ -1769,7 +2149,7 @@ public function print_tree($cats, $parent, $table, $home_url) {
             
             <div class="kb-results">
                 <?php
-                $sql = "SELECT * FROM $table WHERE (is_deleted IS NULL OR is_deleted=0)";
+                $sql = "SELECT * FROM $table WHERE (is_deleted IS NULL OR is_deleted=0) AND (is_archived IS NULL OR is_archived=0)";
                 if($search !== '') {
                     $like = '%' . $wpdb->esc_like($search) . '%';
                     $sql .= $wpdb->prepare(" AND (subject LIKE %s OR short_desc LIKE %s OR technical_desc LIKE %s OR category LIKE %s)", $like, $like, $like, $like);
