@@ -25,6 +25,8 @@ class KB_KnowledgeBase_Editor {
         add_action('wp_enqueue_scripts', [$this, 'enqueue_scripts']);
         add_action('wp_ajax_upload_pasted_image', [$this, 'upload_image']);
         add_action('wp_ajax_nopriv_upload_pasted_image', [$this, 'upload_image']);
+        add_action('wp_ajax_kb_upload_image', [$this, 'upload_image']);
+        add_action('wp_ajax_nopriv_kb_upload_image', [$this, 'upload_image']);
         add_action('wp_ajax_save_article', [$this, 'save_article']);
         add_action('wp_ajax_nopriv_save_article', [$this, 'save_article']);
         add_action('wp_ajax_kb_get_categories', [$this, 'ajax_get_categories']);
@@ -824,7 +826,7 @@ public function print_tree($cats, $parent, $table, $home_url) {
                         const reader = new FileReader();
                         reader.onload = () => {
                             const data = new FormData();
-                            data.append("action", "upload_pasted_image");
+                            data.append("action", "kb_upload_image");
                             data.append("nonce", kbAjax.nonce);
                             data.append("imagedata", reader.result);
                             fetch(kbAjax.ajaxurl, {
@@ -1067,18 +1069,44 @@ public function print_tree($cats, $parent, $table, $home_url) {
 
     public function upload_image() {
         check_ajax_referer('kbnonce', 'nonce');
-        $data = preg_replace('#^data:image/\w+;base64,#', '', $_POST['imagedata']);
-        $data = base_decode($data);
-        if (!$data) wp_send_json_error();
+
+        $raw = isset($_POST['imagedata']) ? wp_unslash($_POST['imagedata']) : '';
+        if(!$raw) {
+            wp_send_json_error(['message' => 'Missing image data']);
+        }
+
+        $ext = 'png';
+        if(preg_match('#^data:image/(\w+);base64,#', $raw, $m)) {
+            $ext = strtolower($m[1]);
+            $raw = substr($raw, strpos($raw, ',') + 1);
+        }
+
+        $data = base64_decode($raw, true);
+        if($data === false) {
+            wp_send_json_error(['message' => 'Invalid image data']);
+        }
+
         $dir = wp_upload_dir();
-        $name = "kb-paste-".time().".png";
-        $path = $dir['path'] . "/" . $name;
-        $url = $dir['url'] . "/" . $name;
+        if(!empty($dir['error'])) {
+            wp_send_json_error(['message' => $dir['error']]);
+        }
+
+        wp_mkdir_p($dir['path']);
+
+        $allowed_ext = ['png','jpg','jpeg','gif','webp'];
+        if(!in_array($ext, $allowed_ext, true)) {
+            $ext = 'png';
+        }
+
+        $name = 'kb-paste-' . time() . '-' . wp_generate_password(6, false, false) . '.' . $ext;
+        $path = trailingslashit($dir['path']) . $name;
+        $url  = trailingslashit($dir['url']) . $name;
+
         if (file_put_contents($path, $data)) {
             wp_send_json_success(['url'=>$url]);
-        } else {
-            wp_send_json_error();
         }
+
+        wp_send_json_error(['message' => 'Upload failed']);
     }
 
     public function public_form_shortcode() {
@@ -1245,7 +1273,7 @@ public function print_tree($cats, $parent, $table, $home_url) {
                         const reader = new FileReader();
                         reader.onload = () => {
                             const data = new FormData();
-                            data.append("action", "upload_pasted_image");
+                            data.append("action", "kb_upload_image");
                             data.append("nonce", kbAjax.nonce);
                             data.append("imagedata", reader.result);
                             fetch(kbAjax.ajaxurl, {
