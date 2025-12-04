@@ -52,12 +52,12 @@
   justify-content: flex-end;
 }
 .kb-btn {
-  background: #2563eb;
-  color: #fff;
-  border: none;
-  box-shadow: 0 2px 8px rgba(37, 99, 235, .15);
-  font-weight: 600;
-  border-radius: 10px;
+  background: #fff;
+  color: #2563eb;
+  border: 1.4px solid #cbd5f5;
+  box-shadow: 0 8px 18px rgba(37, 99, 235, .08);
+  font-weight: 700;
+  border-radius: 999px;
   padding: .65rem 1.4rem;
   transition: all .15s;
   margin-right: 8px;
@@ -67,14 +67,16 @@
 }
 .kb-btn:hover,
 .kb-btn:focus {
-  background: #1d4ed8;
-  box-shadow: 0 4px 16px rgba(37, 99, 235, .25);
+  background: #2563eb;
   color: #fff;
+  box-shadow: 0 10px 24px rgba(37, 99, 235, .18);
   transform: translateY(-1px);
 }
-.kb-btn-primary {background: linear-gradient(90deg,#47ad55 0,#36e 100%);}
-.kb-btn-secondary {background: linear-gradient(90deg,#47ad55 0,#ddd 100%);}
-.kb-btn-warning {background: linear-gradient(90deg,#da4567 0,#46dd95 100%);}
+.kb-btn-primary {background: #2563eb; color:#fff; border-color:#2563eb;}
+.kb-btn-secondary {color:#0f172a; border-color:#d1d5db; background:#fff; box-shadow:0 6px 14px rgba(15,23,42,.08);}
+.kb-btn-secondary:hover,.kb-btn-secondary:focus {background:#0f172a; color:#fff; border-color:#0f172a;}
+.kb-btn-warning {color:#92400e; border-color:#fcd34d; background:#fffbeb; box-shadow:0 8px 18px rgba(252,211,77,.25);}
+.kb-btn-warning:hover,.kb-btn-warning:focus {background:#f59e0b; color:#fff; border-color:#f59e0b;}
 
 /* Status Bubbles */
 .kb-status-bubble {

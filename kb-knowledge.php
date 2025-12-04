@@ -90,7 +90,7 @@ class KB_KnowledgeBase_Editor {
             check_script TEXT DEFAULT NULL,
             check_files TEXT DEFAULT NULL,
             links TEXT DEFAULT NULL,
-            user_rating TINYINT(1) DEFAULT NULL,
+            user_rating TINYINT(3) DEFAULT NULL,
             review_status TINYINT(1) NOT NULL DEFAULT 0,
             is_deleted TINYINT(1) NOT NULL DEFAULT 0,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP
@@ -128,7 +128,9 @@ class KB_KnowledgeBase_Editor {
         }
         $cols6 = $wpdb->get_results("SHOW COLUMNS FROM $table LIKE 'user_rating'");
         if(empty($cols6)) {
-            $wpdb->query("ALTER TABLE $table ADD COLUMN user_rating TINYINT(1) DEFAULT NULL AFTER links");
+            $wpdb->query("ALTER TABLE $table ADD COLUMN user_rating TINYINT(3) DEFAULT NULL AFTER links");
+        } else {
+            $wpdb->query("ALTER TABLE $table MODIFY user_rating TINYINT(3) DEFAULT NULL");
         }
         if(!$wpdb->get_var("SELECT COUNT(*) FROM $cats_table")) {
             $wpdb->insert($cats_table, ['category_name'=>'שרתים', 'parent_id'=>0, 'sort_order'=>1]);
@@ -292,9 +294,9 @@ class KB_KnowledgeBase_Editor {
         </div>
         <style>
         .kb-nav-bar { display:flex; justify-content:flex-start; gap:10px; flex-wrap:wrap; margin:0 0 15px 0; padding:0 5px; box-sizing:border-box; }
-        .kb-nav-btn { display:inline-block; padding:10px 16px; border-radius:10px; background:#e2e8f0; color:#0f172a; text-decoration:none; font-weight:700; box-shadow:0 3px 10px rgba(0,0,0,0.08); transition:all .2s; }
-        .kb-nav-btn:hover { background:#cbd5e1; }
-        .kb-nav-btn.is-active { background:#0ea5e9; color:#fff; box-shadow:0 6px 14px rgba(14,165,233,0.3); }
+        .kb-nav-btn { display:inline-block; padding:10px 18px; border-radius:999px; background:#fff; color:#2563eb; text-decoration:none; font-weight:800; border:1.4px solid #cbd5f5; box-shadow:0 8px 18px rgba(37,99,235,0.08); transition:all .15s; }
+        .kb-nav-btn:hover { background:#2563eb; color:#fff; box-shadow:0 12px 24px rgba(37,99,235,0.18); transform:translateY(-1px); }
+        .kb-nav-btn.is-active { background:#2563eb; color:#fff; border-color:#2563eb; box-shadow:0 12px 24px rgba(37,99,235,0.22); }
         </style>
         <?php
         return ob_get_clean();
@@ -327,17 +329,16 @@ class KB_KnowledgeBase_Editor {
     }
 
     private function get_article_rating($article) {
-        if(!isset($article->user_rating) || $article->user_rating === '' || is_null($article->user_rating)) return 0;
+        if(!isset($article->user_rating) || $article->user_rating === '' || is_null($article->user_rating)) return null;
         $rating = intval($article->user_rating);
-        if($rating < 0) $rating = 0;
-        if($rating > 5) $rating = 5;
+        if($rating < 1 || $rating > 100) return null;
         return $rating;
     }
 
     private function render_rating_badge($article) {
         $rating = $this->get_article_rating($article);
-        if($rating === 0) return '<span class="kb-rating-badge kb-rating-empty">ללא דירוג</span>';
-        return '<span class="kb-rating-badge">'.str_repeat('⭐', $rating).'</span>';
+        if(is_null($rating)) return '';
+        return '<span class="kb-rating-badge">'.esc_html($rating).'</span>';
     }
 
     private function render_article_meta($article) {
@@ -350,7 +351,9 @@ class KB_KnowledgeBase_Editor {
             <span class="kb-meta-chip">📅 <?php echo esc_html($this->format_hebrew_date($article->created_at)); ?></span>
             <span class="kb-meta-chip kb-meta-status-chip"><?php echo $this->render_status_badge($article->review_status); ?></span>
             <span class="kb-meta-chip">⚙️ <?php echo esc_html($this->get_execution_mode($article)); ?></span>
-            <span class="kb-meta-chip"><?php echo $this->render_rating_badge($article); ?></span>
+            <?php $rating_badge = $this->render_rating_badge($article); if($rating_badge): ?>
+                <span class="kb-meta-chip"><?php echo $rating_badge; ?></span>
+            <?php endif; ?>
         </div>
         <?php
         return ob_get_clean();
@@ -569,12 +572,9 @@ public function print_tree($cats, $parent, $table, $home_url) {
             echo '<option value="'.intval($k).'" '.selected($current_status, $k, false).'>'.esc_html($lbl).'</option>';
         }
         echo '</select></div>';
-        echo '<div class="kb-row"><label class="kb-label">דירוג:</label><select name="user_rating" class="kb-input">';
-        echo '<option value="0" '.selected($current_rating, 0, false).'>ללא</option>';
-        for($i=1;$i<=5;$i++) {
-            echo '<option value="'.$i.'" '.selected($current_rating, $i, false).'>'.str_repeat('⭐', $i).'</option>';
-        }
-        echo '</select></div>';
+        echo '<div class="kb-row"><label class="kb-label">דירוג:</label>';
+        echo '<input type="number" name="user_rating" class="kb-input" min="1" max="100" value="'.($current_rating ? intval($current_rating) : '').'" placeholder="1-100">';
+        echo '</div>';
         echo '</fieldset>';
 
         echo '<fieldset class="kb-fieldset"><legend>פרטים</legend>';
@@ -776,8 +776,8 @@ public function print_tree($cats, $parent, $table, $home_url) {
         $status = isset($_POST['review_status']) ? intval($_POST['review_status']) : 0;
         if($status < 0 || $status > 2) { $status = 0; }
 
-        $user_rating = isset($_POST['user_rating']) ? intval($_POST['user_rating']) : 0;
-        if($user_rating < 0 || $user_rating > 5) { $user_rating = 0; }
+        $user_rating = isset($_POST['user_rating']) && $_POST['user_rating'] !== '' ? intval($_POST['user_rating']) : null;
+        if(!is_null($user_rating) && ($user_rating < 1 || $user_rating > 100)) { $user_rating = null; }
 
         // ⭐ בדיקת כפילויות - רק אם זה מאמר חדש
         $article_id = isset($_POST['article_id']) ? intval($_POST['article_id']) : 0;
@@ -802,7 +802,7 @@ public function print_tree($cats, $parent, $table, $home_url) {
         }
 
         $data['review_status'] = $status;
-        $data['user_rating'] = $user_rating ?: null;
+        $data['user_rating'] = $user_rating;
         
         if (isset($_FILES['solution_files']) && !empty($_FILES['solution_files']['name'][0])) {
             require_once(ABSPATH . 'wp-admin/includes/file.php');
@@ -878,6 +878,7 @@ public function print_tree($cats, $parent, $table, $home_url) {
         $article = $edit_id ? $wpdb->get_row($wpdb->prepare("SELECT * FROM {$wpdb->prefix}kb_articles WHERE id=%d", $edit_id)) : null;
         $status_labels = $this->get_status_labels();
         $current_status = $article ? intval($article->review_status) : 0;
+        $current_rating = $article ? intval($article->user_rating) : 0;
 
         $kb_home_url = isset($_SERVER['HTTP_REFERER']) ? $_SERVER['HTTP_REFERER'] : get_permalink(get_the_ID());
         $kb_home_url = remove_query_arg('edit_article', $kb_home_url);
@@ -914,10 +915,7 @@ public function print_tree($cats, $parent, $table, $home_url) {
                     </select>
                 </div>
                 <div class="kb-row"><label class="kb-label">דירוג:</label>
-                    <select name="user_rating" class="kb-input">
-                        <option value="0" <?php selected($current_rating, 0); ?>>ללא</option>
-                        <?php for($i=1;$i<=5;$i++) echo '<option value="'.$i.'" '.selected($current_rating, $i, false).'>'.str_repeat('⭐', $i).'</option>'; ?>
-                    </select>
+                    <input type="number" name="user_rating" class="kb-input" min="1" max="100" value="<?php echo $current_rating ? intval($current_rating) : ''; ?>" placeholder="1-100">
                 </div>
             </fieldset>
             
@@ -1139,6 +1137,7 @@ public function print_tree($cats, $parent, $table, $home_url) {
         $trash_url = $trash_page ? get_permalink($trash_page->ID) : '';
 
         $articles = $wpdb->get_results("SELECT * FROM $table WHERE (is_deleted IS NULL OR is_deleted=0) ORDER BY created_at DESC");
+        $status_labels = $this->get_status_labels();
 
         ob_start();
         ?>
@@ -1149,7 +1148,6 @@ public function print_tree($cats, $parent, $table, $home_url) {
                 <h1>טבלת מאמרים</h1>
                 <div class="kb-table-view-actions">
                     <?php if($back_url): ?><a class="kb-btn kb-btn-grey" href="<?php echo esc_url($back_url); ?>">← חזרה לתצוגת כרטיסים</a><?php endif; ?>
-                    <?php if($page_url): ?><a class="kb-btn kb-btn-secondary" href="<?php echo esc_url($page_url); ?>">↩ חזרה לדף</a><?php endif; ?>
                     <?php if($add_article_url): ?><a class="kb-btn kb-btn-primary" href="<?php echo esc_url($add_article_url); ?>">➕ הוסף מאמר חדש</a><?php endif; ?>
                     <?php if($trash_url): ?><a class="kb-btn kb-btn-danger" href="<?php echo esc_url($trash_url); ?>">🗑️ סל מחזור</a><?php endif; ?>
                 </div>
@@ -1158,6 +1156,40 @@ public function print_tree($cats, $parent, $table, $home_url) {
             <div class="kb-table-search">
                 <input type="text" id="kb-table-search" placeholder="חיפוש לפי נושא..." aria-label="חיפוש לפי נושא">
                 <button type="button" id="kb-table-search-clear">נקה</button>
+            </div>
+
+            <div class="kb-table-filters">
+                <div class="kb-filter-group">
+                    <label for="kb-sort-field">מיין לפי:</label>
+                    <select id="kb-sort-field">
+                        <option value="subject">נושא</option>
+                        <option value="maincat">קטגוריה ראשית</option>
+                        <option value="subcat">תת קטגוריה</option>
+                        <option value="status">סטטוס</option>
+                        <option value="rating">דירוג</option>
+                    </select>
+                    <select id="kb-sort-direction">
+                        <option value="asc">עולה</option>
+                        <option value="desc">יורד</option>
+                    </select>
+                </div>
+                <div class="kb-filter-group">
+                    <label for="kb-filter-status">סינון סטטוס:</label>
+                    <select id="kb-filter-status">
+                        <option value="">הכל</option>
+                        <?php foreach($status_labels as $k=>$lbl): ?>
+                            <option value="<?php echo intval($k); ?>"><?php echo esc_html($lbl); ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <div class="kb-filter-group">
+                    <label for="kb-filter-execution">סינון ביצוע:</label>
+                    <select id="kb-filter-execution">
+                        <option value="">הכל</option>
+                        <option value="auto">אוטומטי</option>
+                        <option value="manual">ידני</option>
+                    </select>
+                </div>
             </div>
 
             <table class="kb-table-view-table">
@@ -1177,14 +1209,16 @@ public function print_tree($cats, $parent, $table, $home_url) {
                     $article_url = add_query_arg(['page_id'=>$page_id,'kb_article'=>$article->id], home_url('/'));
                     $edit_url = $add_article_page ? add_query_arg('edit_article', $article->id, get_permalink($add_article_page->ID)) : '';
                     $trash_link = current_user_can('manage_options') ? wp_nonce_url(add_query_arg(['page_id'=>$page_id,'kb_pub_action'=>'trash','article_id'=>$article->id], $page_url), 'kb_pub_action_'.$article->id) : '';
+                    $rating_value = $this->get_article_rating($article);
+                    $execution_mode = $this->get_execution_mode($article);
                 ?>
-                    <tr class="kb-table-row" data-article-id="<?php echo intval($article->id); ?>">
+                    <tr class="kb-table-row" data-article-id="<?php echo intval($article->id); ?>" data-subject="<?php echo esc_attr(mb_strtolower($article->subject)); ?>" data-maincat="<?php echo esc_attr(mb_strtolower($main_cat)); ?>" data-subcat="<?php echo esc_attr(mb_strtolower($sub_cat)); ?>" data-status="<?php echo intval($article->review_status); ?>" data-rating="<?php echo is_null($rating_value) ? '' : intval($rating_value); ?>" data-execution="<?php echo $execution_mode==='אוטומטי' ? 'auto' : 'manual'; ?>">
                         <td><?php echo esc_html($article->subject); ?></td>
                         <td><?php echo esc_html($main_cat); ?></td>
                         <td><?php echo esc_html($sub_cat); ?></td>
                         <td><?php echo $this->render_status_badge($article->review_status); ?></td>
                         <td><?php echo $this->render_rating_badge($article); ?></td>
-                        <td><span class="kb-execution-chip <?php echo $this->get_execution_mode($article)==='אוטומטי' ? 'kb-execution-auto' : 'kb-execution-manual'; ?>"><?php echo esc_html($this->get_execution_mode($article)); ?></span></td>
+                        <td><span class="kb-execution-chip <?php echo $execution_mode==='אוטומטי' ? 'kb-execution-auto' : 'kb-execution-manual'; ?>"><?php echo esc_html($execution_mode); ?></span></td>
                     </tr>
                     <tr class="kb-table-row-detail" data-article-id="<?php echo intval($article->id); ?>" style="display:none;">
                         <td colspan="6">
@@ -1196,13 +1230,14 @@ public function print_tree($cats, $parent, $table, $home_url) {
                                     <?php if($edit_url): ?><a class="kb-btn kb-btn-secondary" href="<?php echo esc_url($edit_url); ?>">✏️ עריכה</a><?php endif; ?>
                                     <?php if($trash_link): ?><a class="kb-btn kb-btn-danger" href="<?php echo esc_url($trash_link); ?>" onclick="return confirm('להעביר את המאמר לסל מחזור?');">🗑️ מחיקה</a><?php endif; ?>
                                     <a class="kb-btn kb-btn-secondary" href="<?php echo esc_url($article_url); ?>">פתח מאמר</a>
-                                    <?php if($back_url): ?><a class="kb-btn kb-btn-grey" href="<?php echo esc_url($back_url); ?>">↩ חזרה</a><?php endif; ?>
-                                    <button type="button" class="kb-btn kb-btn-close" data-close-article="<?php echo intval($article->id); ?>">✖ סגור</button>
                                 </div>
                                 <div class="kb-detail-row-meta">
                                     <?php echo $this->render_article_meta($article); ?>
                                 </div>
                                 <?php echo $this->render_article_body($article, false); ?>
+                                <div class="kb-detail-row-close">
+                                    <button type="button" class="kb-btn kb-btn-close" data-close-article="<?php echo intval($article->id); ?>">✖ סגור</button>
+                                </div>
                             </div>
                         </td>
                     </tr>
@@ -1213,13 +1248,10 @@ public function print_tree($cats, $parent, $table, $home_url) {
         </div>
         <style>
         .kb-table-view-container { width:100%; max-width:100%; margin:20px auto; padding:10px; box-sizing:border-box; font-family:Arial,sans-serif; }
-        .kb-table-view-container .kb-btn { padding:10px 18px; border:none; border-radius:5px; cursor:pointer; text-decoration:none; display:inline-block; font-size:15px; font-weight:600; transition:all 0.3s; color:#fff; }
-        .kb-table-view-container .kb-btn-primary { background:#3498db; }
-        .kb-table-view-container .kb-btn-primary:hover { background:#2980b9; }
-        .kb-table-view-container .kb-btn-secondary { background:#95a5a6; }
-        .kb-table-view-container .kb-btn-secondary:hover { background:#7f8c8d; }
-        .kb-table-view-container .kb-btn-danger { background:#e74c3c; }
-        .kb-table-view-container .kb-btn-danger:hover { background:#c0392b; }
+        .kb-table-view-container .kb-btn { padding:10px 18px; border-radius:999px; border:1.4px solid #cbd5f5; cursor:pointer; text-decoration:none; display:inline-block; font-size:15px; font-weight:700; transition:all 0.2s; color:#2563eb; background:#fff; box-shadow:0 8px 18px rgba(37,99,235,0.08); }
+        .kb-table-view-container .kb-btn-primary { background:#2563eb; color:#fff; border-color:#2563eb; }
+        .kb-table-view-container .kb-btn-secondary { background:#fff; color:#2563eb; border-color:#cbd5f5; }
+        .kb-table-view-container .kb-btn-danger { background:#dc2626; color:#fff; border-color:#dc2626; box-shadow:0 8px 18px rgba(220,38,38,0.18); }
         .kb-table-view-header { display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:15px; }
         .kb-table-view-header h1 { margin:0; color:#2c3e50; }
         .kb-table-view-actions { display:flex; gap:8px; flex-wrap:wrap; }
@@ -1227,8 +1259,12 @@ public function print_tree($cats, $parent, $table, $home_url) {
         .kb-table-search input { padding:10px 12px; border:1px solid #cbd5e1; border-radius:8px; min-width:220px; font-size:15px; }
         .kb-table-search button { padding:10px 14px; border:none; border-radius:8px; background:#e2e8f0; cursor:pointer; font-weight:700; color:#0f172a; }
         .kb-table-search button:hover { background:#cbd5e1; }
-        .kb-btn-grey { background:#7f8c8d; color:#fff; }
-        .kb-btn-grey:hover { background:#707b7c; color:#fff; }
+        .kb-table-filters { display:flex; gap:12px; flex-wrap:wrap; align-items:flex-end; margin:0 0 14px 0; }
+        .kb-filter-group { display:flex; gap:6px; align-items:center; }
+        .kb-filter-group label { font-weight:700; color:#0f172a; }
+        .kb-filter-group select { padding:10px 12px; border:1px solid #cbd5e1; border-radius:8px; background:#fff; }
+        .kb-btn-grey { background:#fff; color:#1f2937; border-color:#d1d5db; box-shadow:0 8px 18px rgba(15,23,42,0.08); }
+        .kb-btn-grey:hover { background:#1f2937; color:#fff; border-color:#1f2937; }
         .kb-table-view-table { width:100%; border-collapse:collapse; background:#fff; box-shadow:0 2px 6px rgba(0,0,0,0.08); }
         .kb-table-view-table th, .kb-table-view-table td { padding:14px 12px; border-bottom:1px solid #e6e6e6; text-align:right; }
         .kb-table-view-table th { background:#f4f6f7; color:#2c3e50; font-weight:700; }
@@ -1240,52 +1276,91 @@ public function print_tree($cats, $parent, $table, $home_url) {
         .kb-detail-row-header h3 { margin:0; color:#2c3e50; }
         .kb-detail-row-buttons { display:flex; gap:8px; flex-wrap:wrap; margin:0 0 10px 0; }
         .kb-detail-row-meta { margin:0 0 10px 0; }
+        .kb-detail-row-close { margin-top:14px; text-align:right; }
         .kb-article-body-block .kb-section { margin:18px 0; padding:16px; background:#ececec; border-right:5px solid #3498db; border-radius:7px; }
         .kb-article-body-block .kb-section h3 { margin-top:0; color:#34495e; }
         .kb-article-body-block pre { background:transparent; padding:12px 0; border:none; white-space:pre-wrap; direction:ltr; text-align:left; font-family:"Courier New",Consolas,monospace; font-size:14px; line-height:1.5; }
         .kb-meta-inline { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:10px; }
         .kb-meta-chip { background:#eef2f5; padding:6px 10px; border-radius:6px; color:#34495e; font-weight:600; }
         .kb-meta-status-chip .kb-status-badge { margin:0; }
-        .kb-execution-chip { padding:6px 10px; border-radius:6px; font-weight:700; background:#eef2f5; color:#1f2937; border:1px solid #cbd5e1; }
+        .kb-execution-chip { padding:0; border-radius:0; font-weight:700; background:transparent; color:#0f172a; border:none; }
         .kb-execution-auto { }
         .kb-execution-manual { }
-        .kb-rating-badge { display:inline-block; padding:6px 10px; background:#fff7ed; color:#9a3412; border:1px solid #fed7aa; border-radius:6px; font-weight:700; }
-        .kb-rating-badge.kb-rating-empty { background:#e2e8f0; color:#475569; border-color:#cbd5e1; }
+        .kb-rating-badge { display:inline-block; padding:6px 10px; background:transparent; color:#0f172a; border:none; border-radius:6px; font-weight:800; }
         .kb-btn-close { background:#34495e; }
         .kb-btn-close:hover { background:#2c3e50; }
         </style>
         <script>
         document.addEventListener('DOMContentLoaded', function(){
             var tableRows = Array.from(document.querySelectorAll('.kb-table-row'));
+            var rowPairs = tableRows.map(function(row){
+                return {
+                    row: row,
+                    detail: document.querySelector('.kb-table-row-detail[data-article-id="'+row.getAttribute('data-article-id')+'"]')
+                };
+            });
 
             function toggleDetail(row){
                 var id = row.getAttribute('data-article-id');
                 var detail = document.querySelector('.kb-table-row-detail[data-article-id="'+id+'"]');
                 if(detail){
-                    var open = detail.style.display === 'table-row';
-                    detail.style.display = open ? 'none' : 'table-row';
+                    var open = detail.dataset.open === '1';
                     detail.dataset.open = open ? '0' : '1';
+                    detail.style.display = open ? 'none' : 'table-row';
                 }
             }
 
-            function applySearchFilter(){
-                var query = document.getElementById('kb-table-search').value.trim().toLowerCase();
-                tableRows.forEach(function(row){
-                    var subjectCell = row.querySelector('td');
-                    var subject = subjectCell ? subjectCell.textContent.toLowerCase() : '';
-                    var matches = subject.indexOf(query) !== -1;
-                    var detail = document.querySelector('.kb-table-row-detail[data-article-id="'+row.getAttribute('data-article-id')+'"]');
-                    row.style.display = matches ? '' : 'none';
-                    if(detail){
-                        if(!matches){ detail.style.display = 'none'; detail.dataset.open = '0'; }
+            function applyFilters(){
+                var query = (document.getElementById('kb-table-search').value || '').trim().toLowerCase();
+                var statusVal = (document.getElementById('kb-filter-status').value || '').toString();
+                var execVal = (document.getElementById('kb-filter-execution').value || '').toString();
+
+                rowPairs.forEach(function(pair){
+                    var subject = pair.row.dataset.subject || '';
+                    var matchesSearch = subject.indexOf(query) !== -1;
+                    var matchesStatus = !statusVal || (pair.row.dataset.status === statusVal);
+                    var matchesExec = !execVal || (pair.row.dataset.execution === execVal);
+                    var visible = matchesSearch && matchesStatus && matchesExec;
+                    pair.row.style.display = visible ? '' : 'none';
+                    if(pair.detail){
+                        if(!visible){
+                            pair.detail.style.display = 'none';
+                            pair.detail.dataset.open = '0';
+                        } else if(pair.detail.dataset.open === '1'){
+                            pair.detail.style.display = 'table-row';
+                        }
                     }
                 });
             }
 
-            tableRows.forEach(function(row){
-                row.addEventListener('click', function(e){
+            function getSortValue(row, field){
+                var val = row.dataset[field] || '';
+                if(field === 'rating'){
+                    return val === '' ? -Infinity : parseInt(val, 10);
+                }
+                return val;
+            }
+
+            function applySort(){
+                var field = document.getElementById('kb-sort-field').value;
+                var dir = document.getElementById('kb-sort-direction').value === 'desc' ? -1 : 1;
+                var tbody = document.querySelector('.kb-table-view-table tbody');
+                rowPairs.sort(function(a,b){
+                    var av = getSortValue(a.row, field);
+                    var bv = getSortValue(b.row, field);
+                    if(av === bv) return 0;
+                    return av > bv ? dir : -dir;
+                });
+                rowPairs.forEach(function(pair){
+                    tbody.appendChild(pair.row);
+                    if(pair.detail) tbody.appendChild(pair.detail);
+                });
+            }
+
+            rowPairs.forEach(function(pair){
+                pair.row.addEventListener('click', function(e){
                     if(e.target.closest('a, button, input, select, textarea')) return;
-                    toggleDetail(this);
+                    toggleDetail(pair.row);
                 });
             });
 
@@ -1301,17 +1376,30 @@ public function print_tree($cats, $parent, $table, $home_url) {
             var searchInput = document.getElementById('kb-table-search');
             var clearBtn = document.getElementById('kb-table-search-clear');
             if(searchInput){
-                searchInput.addEventListener('input', applySearchFilter);
+                searchInput.addEventListener('input', function(){ applyFilters(); applySort(); });
             }
             if(clearBtn){
                 clearBtn.addEventListener('click', function(){
                     if(searchInput){
                         searchInput.value = '';
-                        applySearchFilter();
+                        applyFilters();
+                        applySort();
                         searchInput.focus();
                     }
                 });
             }
+
+            ['kb-filter-status','kb-filter-execution','kb-sort-field','kb-sort-direction'].forEach(function(id){
+                var el = document.getElementById(id);
+                if(!el) return;
+                el.addEventListener('change', function(){
+                    applyFilters();
+                    applySort();
+                });
+            });
+
+            applyFilters();
+            applySort();
         });
         </script>
         <?php
@@ -1391,13 +1479,11 @@ public function print_tree($cats, $parent, $table, $home_url) {
         </div>
         <style>
         .kb-table-view-container { width:100%; max-width:100%; margin:20px auto; padding:10px; box-sizing:border-box; font-family:Arial,sans-serif; }
-        .kb-table-view-container .kb-btn { padding:10px 18px; border:none; border-radius:5px; cursor:pointer; text-decoration:none; display:inline-block; font-size:15px; font-weight:600; transition:all 0.3s; color:#fff; }
-        .kb-table-view-container .kb-btn-secondary { background:#95a5a6; }
-        .kb-table-view-container .kb-btn-secondary:hover { background:#7f8c8d; }
-        .kb-table-view-container .kb-btn-grey { background:#7f8c8d; color:#fff; }
-        .kb-table-view-container .kb-btn-grey:hover { background:#707b7c; color:#fff; }
-        .kb-table-view-container .kb-btn-danger { background:#e74c3c; }
-        .kb-table-view-container .kb-btn-danger:hover { background:#c0392b; }
+        .kb-table-view-container .kb-btn { padding:10px 18px; border-radius:999px; border:1.4px solid #cbd5f5; cursor:pointer; text-decoration:none; display:inline-block; font-size:15px; font-weight:700; transition:all 0.2s; color:#2563eb; background:#fff; box-shadow:0 8px 18px rgba(37,99,235,0.08); }
+        .kb-table-view-container .kb-btn-secondary { background:#fff; color:#2563eb; border-color:#cbd5f5; }
+        .kb-table-view-container .kb-btn-grey { background:#fff; color:#1f2937; border-color:#d1d5db; box-shadow:0 8px 18px rgba(15,23,42,0.08); }
+        .kb-table-view-container .kb-btn-grey:hover { background:#1f2937; color:#fff; border-color:#1f2937; }
+        .kb-table-view-container .kb-btn-danger { background:#dc2626; color:#fff; border-color:#dc2626; box-shadow:0 8px 18px rgba(220,38,38,0.18); }
         .kb-table-view-header { display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:15px; }
         .kb-table-view-header h1 { margin:0; color:#2c3e50; }
         .kb-table-view-actions { display:flex; gap:8px; flex-wrap:wrap; }
@@ -1666,21 +1752,15 @@ public function print_tree($cats, $parent, $table, $home_url) {
         .kb-home-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:25px; flex-wrap:wrap; gap:15px; }
         .kb-home-header h1 { margin:0; color:#2c3e50; }
         .kb-home-actions { display:flex; gap:10px; flex-wrap:wrap; }
-        .kb-btn { padding:10px 20px; border:none; border-radius:5px; cursor:pointer; text-decoration:none; display:inline-block; font-size:15px; font-weight:600; transition:all 0.3s; color:#fff; }
-        .kb-btn-primary { background:#3498db; }
-        .kb-btn-primary:hover { background:#2980b9; }
-        .kb-btn-outline { background:#fff; color:#3498db; border:2px solid #3498db; }
-        .kb-btn-outline:hover { background:#3498db; color:#fff; }
-        .kb-btn-secondary { background:#95a5a6; }
-        .kb-btn-secondary:hover { background:#7f8c8d; }
-        .kb-btn-warning { background:#f39c12; }
-        .kb-btn-warning:hover { background:#e67e22; }
-        .kb-btn-search { background:#27ae60; }
-        .kb-btn-search:hover { background:#229954; }
-        .kb-btn-clear { background:#e74c3c; padding:10px 15px; }
-        .kb-btn-clear:hover { background:#c0392b; }
-        .kb-btn-success { background:#27ae60; }
-        .kb-btn-success:hover { background:#229954; }
+        .kb-btn { padding:10px 20px; border-radius:999px; border:1.4px solid #cbd5f5; cursor:pointer; text-decoration:none; display:inline-block; font-size:15px; font-weight:700; transition:all 0.2s; color:#2563eb; background:#fff; box-shadow:0 8px 18px rgba(37,99,235,0.08); }
+        .kb-btn-primary { background:#2563eb; color:#fff; border-color:#2563eb; }
+        .kb-btn-outline { background:#fff; color:#2563eb; border-color:#cbd5f5; }
+        .kb-btn-outline:hover { background:#2563eb; color:#fff; border-color:#2563eb; }
+        .kb-btn-secondary { background:#fff; color:#2563eb; border-color:#cbd5f5; }
+        .kb-btn-warning { background:#fffbeb; color:#92400e; border-color:#fcd34d; box-shadow:0 8px 18px rgba(252,211,77,0.25); }
+        .kb-btn-search { background:#2563eb; color:#fff; border-color:#2563eb; }
+        .kb-btn-clear { background:#fff; color:#dc2626; border-color:#fecdd3; box-shadow:0 8px 18px rgba(220,38,38,0.08); padding:10px 15px; }
+        .kb-btn-success { background:#16a34a; color:#fff; border-color:#16a34a; box-shadow:0 8px 18px rgba(22,163,74,0.18); }
         .kb-search-box { margin-bottom:20px; }
         .kb-search-form-home { display:flex; gap:8px; flex-wrap:wrap; }
         .kb-search-input { flex:1; min-width:250px; padding:10px 15px; border:1px solid #bdc3c7; border-radius:5px; font-size:16px; }
