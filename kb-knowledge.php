@@ -509,17 +509,17 @@ class KB_KnowledgeBase_Editor {
     }
 	public function shortcode_tree($atts) {
 		global $wpdb;
-		$cats = $wpdb->get_results("SELECT * FROM {$wpdb->prefix}kb_categories ORDER BY parent_id, sort_order, category_name");
-		$table = $wpdb->prefix . 'kb_articles';
-		$home_url = home_url('/');
-		ob_start();
-                echo "<div style='text-align:right;direction:rtl;max-width:770px;margin:auto;padding:30px 0;'>";
-                echo $this->render_navigation_bar('categories');
-                echo '<h2 style="margin:28px 0 16px 0;border-bottom:1.5px solid #eee;">עץ קטגוריות ומאמרים</h2><ul style="list-style-type:none;padding-right:0;">';
-		$this->print_tree($cats, 0, $table, $home_url);
-		echo "</ul></div>";
-		return ob_get_clean();
-	}
+        $cats = $wpdb->get_results("SELECT * FROM {$wpdb->prefix}kb_categories ORDER BY parent_id, sort_order, category_name");
+        $table = $wpdb->prefix . 'kb_articles';
+        $home_url = home_url('/');
+        ob_start();
+        echo "<div class=\"kb-container\"><div style='text-align:right;direction:rtl;max-width:770px;margin:auto;padding:30px 0;'>";
+        echo $this->render_navigation_bar('categories');
+        echo '<h2 style="margin:28px 0 16px 0;border-bottom:1.5px solid #eee;">עץ קטגוריות ומאמרים</h2><ul style="list-style-type:none;padding-right:0;">';
+        $this->print_tree($cats, 0, $table, $home_url);
+        echo "</ul></div></div>";
+        return ob_get_clean();
+    }
 public function print_tree($cats, $parent, $table, $home_url) {
     global $wpdb;
     foreach ($cats as $c) {
@@ -885,6 +885,7 @@ public function print_tree($cats, $parent, $table, $home_url) {
         ob_start();
         wp_nonce_field('save_article_nonce','article_nonce');
         ?>
+        <div class="kb-container">
         <div class="kb-public-form-container">
         <h2><?php echo $article ? 'ערוך מאמר' : 'הוסף מאמר חדש'; ?></h2>
         
@@ -973,7 +974,9 @@ public function print_tree($cats, $parent, $table, $home_url) {
             <div id="save-message"></div>
         </form>
         </div>
-        
+
+        </div>
+
         <style>
         .kb-public-form-container { max-width:900px; margin:30px auto; padding:30px; background:#fff; border-radius:8px; box-shadow:0 2px 10px rgba(0,0,0,0.1); direction:rtl; text-align:right; }
         .kb-public-form-container h2 { text-align:center; color:#2c3e50; margin-bottom:25px; }
@@ -1139,6 +1142,7 @@ public function print_tree($cats, $parent, $table, $home_url) {
 
         ob_start();
         ?>
+        <div class="kb-container">
         <div class="kb-table-view-container">
             <?php echo $this->render_navigation_bar('table'); ?>
             <div class="kb-table-view-header">
@@ -1205,6 +1209,7 @@ public function print_tree($cats, $parent, $table, $home_url) {
                 <?php endforeach; ?>
                 </tbody>
             </table>
+        </div>
         </div>
         <style>
         .kb-table-view-container { width:100%; max-width:100%; margin:20px auto; padding:10px; box-sizing:border-box; font-family:Arial,sans-serif; }
@@ -1334,6 +1339,7 @@ public function print_tree($cats, $parent, $table, $home_url) {
 
         ob_start();
         ?>
+        <div class="kb-container">
         <div class="kb-table-view-container">
             <?php echo $this->render_navigation_bar('trash'); ?>
             <div class="kb-table-view-header">
@@ -1381,6 +1387,7 @@ public function print_tree($cats, $parent, $table, $home_url) {
                     <?php endforeach; ?>
                 </tbody>
             </table>
+        </div>
         </div>
         <style>
         .kb-table-view-container { width:100%; max-width:100%; margin:20px auto; padding:10px; box-sizing:border-box; font-family:Arial,sans-serif; }
@@ -1436,9 +1443,10 @@ public function print_tree($cats, $parent, $table, $home_url) {
             $back_url = add_query_arg('page_id', $page_id, home_url('/'));
             if($search) $back_url = add_query_arg('kbs', $search, $back_url);
             if($cat_filter) $back_url = add_query_arg('kbcat', $cat_filter, $back_url);
-            
+
             ob_start();
             ?>
+            <div class="kb-container">
             <div class="kb-single-article">
                 <?php echo $this->render_navigation_bar('home'); ?>
                 <div class="kb-article-header">
@@ -1502,6 +1510,7 @@ public function print_tree($cats, $parent, $table, $home_url) {
                     <a href="<?php echo esc_url($back_url); ?>" class="kb-btn-back">← חזרה לרשימה</a>
                 </div>
             </div>
+            </div>
             <style>
             .kb-article-header, .kb-article-footer { display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; gap:10px; flex-wrap:wrap; }
             .kb-article-footer { margin-top:30px; margin-bottom:0; }
@@ -1547,6 +1556,7 @@ public function print_tree($cats, $parent, $table, $home_url) {
 
         ob_start();
         ?>
+        <div class="kb-container">
         <div class="kb-home-container">
             <?php echo $this->render_navigation_bar('home'); ?>
             <div class="kb-home-header">
@@ -1648,7 +1658,9 @@ public function print_tree($cats, $parent, $table, $home_url) {
                 <?php endif; ?>
             </div>
         </div>
-        
+
+        </div>
+
         <style>
         .kb-home-container { max-width:100%; width:100%; margin:30px auto; padding:20px 10px; font-family:Arial,sans-serif; box-sizing:border-box; }
         .kb-home-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:25px; flex-wrap:wrap; gap:15px; }
