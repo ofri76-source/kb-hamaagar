@@ -91,6 +91,7 @@ class KB_KnowledgeBase_Editor {
             check_files TEXT DEFAULT NULL,
             links TEXT DEFAULT NULL,
             user_rating TINYINT(3) DEFAULT NULL,
+            vulnerability_level TINYINT(1) DEFAULT NULL,
             review_status TINYINT(1) NOT NULL DEFAULT 0,
             is_deleted TINYINT(1) NOT NULL DEFAULT 0,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP
@@ -131,6 +132,10 @@ class KB_KnowledgeBase_Editor {
             $wpdb->query("ALTER TABLE $table ADD COLUMN user_rating TINYINT(3) DEFAULT NULL AFTER links");
         } else {
             $wpdb->query("ALTER TABLE $table MODIFY user_rating TINYINT(3) DEFAULT NULL");
+        }
+        $cols7 = $wpdb->get_results("SHOW COLUMNS FROM $table LIKE 'vulnerability_level'");
+        if(empty($cols7)) {
+            $wpdb->query("ALTER TABLE $table ADD COLUMN vulnerability_level TINYINT(1) DEFAULT NULL AFTER user_rating");
         }
         if(!$wpdb->get_var("SELECT COUNT(*) FROM $cats_table")) {
             $wpdb->insert($cats_table, ['category_name'=>'שרתים', 'parent_id'=>0, 'sort_order'=>1]);
@@ -335,6 +340,28 @@ class KB_KnowledgeBase_Editor {
         return $rating;
     }
 
+    private function sanitize_vulnerability_level($value) {
+        $map = [
+            'low' => 1,
+            'medium' => 2,
+            'high' => 3
+        ];
+        if(is_null($value) || $value === '') return null;
+        $value = is_numeric($value) ? intval($value) : strtolower(trim($value));
+        if(isset($map[$value])) return $map[$value];
+        $flipped = array_flip($map);
+        return isset($flipped[$value]) ? $value : null;
+    }
+
+    private function get_vulnerability_label($article) {
+        if(!isset($article->vulnerability_level) || $article->vulnerability_level === '' || is_null($article->vulnerability_level)) return '';
+        $level = intval($article->vulnerability_level);
+        if($level === 1) return 'נמוכה';
+        if($level === 2) return 'בינונית';
+        if($level === 3) return 'גבוהה';
+        return '';
+    }
+
     private function render_rating_badge($article) {
         $rating = $this->get_article_rating($article);
         if(is_null($rating)) return '';
@@ -351,6 +378,9 @@ class KB_KnowledgeBase_Editor {
             <span class="kb-meta-chip">📅 <?php echo esc_html($this->format_hebrew_date($article->created_at)); ?></span>
             <span class="kb-meta-chip kb-meta-status-chip"><?php echo $this->render_status_badge($article->review_status); ?></span>
             <span class="kb-meta-chip">⚙️ <?php echo esc_html($this->get_execution_mode($article)); ?></span>
+            <?php $vuln_label = $this->get_vulnerability_label($article); if($vuln_label): ?>
+                <span class="kb-meta-chip">🛡️ <?php echo esc_html($vuln_label); ?></span>
+            <?php endif; ?>
             <?php $rating_badge = $this->render_rating_badge($article); if($rating_badge): ?>
                 <span class="kb-meta-chip"><?php echo $rating_badge; ?></span>
             <?php endif; ?>
@@ -553,6 +583,7 @@ public function print_tree($cats, $parent, $table, $home_url) {
         $status_labels = $this->get_status_labels();
         $current_status = $article ? intval($article->review_status) : 0;
         $current_rating = $article ? intval($article->user_rating) : 0;
+        $current_vuln = $article ? intval($article->vulnerability_level) : 0;
 
         echo '<div class="wrap"><h1>' . ($article ? 'עריכת מאמר' : 'הוסף מאמר חדש') . '</h1>';
         echo '<form id="kb-article-form" class="kb-form" enctype="multipart/form-data">';
@@ -574,6 +605,14 @@ public function print_tree($cats, $parent, $table, $home_url) {
         echo '</select></div>';
         echo '<div class="kb-row"><label class="kb-label">דירוג:</label>';
         echo '<input type="number" name="user_rating" class="kb-input" min="1" max="100" value="'.($current_rating ? intval($current_rating) : '').'" placeholder="1-100">';
+        echo '</div>';
+        echo '<div class="kb-row"><label class="kb-label">פגיעות:</label>';
+        echo '<select name="vulnerability_level" class="kb-input">';
+        echo '<option value="">בחר דרגת פגיעות</option>';
+        echo '<option value="low" '.($article && intval($article->vulnerability_level)===1 ? 'selected' : '').'>נמוכה</option>';
+        echo '<option value="medium" '.($article && intval($article->vulnerability_level)===2 ? 'selected' : '').'>בינונית</option>';
+        echo '<option value="high" '.($article && intval($article->vulnerability_level)===3 ? 'selected' : '').'>גבוהה</option>';
+        echo '</select>';
         echo '</div>';
         echo '</fieldset>';
 
@@ -779,6 +818,8 @@ public function print_tree($cats, $parent, $table, $home_url) {
         $user_rating = isset($_POST['user_rating']) && $_POST['user_rating'] !== '' ? intval($_POST['user_rating']) : null;
         if(!is_null($user_rating) && ($user_rating < 1 || $user_rating > 100)) { $user_rating = null; }
 
+        $vulnerability_level = isset($_POST['vulnerability_level']) ? $this->sanitize_vulnerability_level($_POST['vulnerability_level']) : null;
+
         // ⭐ בדיקת כפילויות - רק אם זה מאמר חדש
         $article_id = isset($_POST['article_id']) ? intval($_POST['article_id']) : 0;
         if(!$article_id) {
@@ -803,6 +844,7 @@ public function print_tree($cats, $parent, $table, $home_url) {
 
         $data['review_status'] = $status;
         $data['user_rating'] = $user_rating;
+        $data['vulnerability_level'] = $vulnerability_level;
         
         if (isset($_FILES['solution_files']) && !empty($_FILES['solution_files']['name'][0])) {
             require_once(ABSPATH . 'wp-admin/includes/file.php');
@@ -916,6 +958,14 @@ public function print_tree($cats, $parent, $table, $home_url) {
                 </div>
                 <div class="kb-row"><label class="kb-label">דירוג:</label>
                     <input type="number" name="user_rating" class="kb-input" min="1" max="100" value="<?php echo $current_rating ? intval($current_rating) : ''; ?>" placeholder="1-100">
+                </div>
+                <div class="kb-row"><label class="kb-label">פגיעות:</label>
+                    <select name="vulnerability_level" class="kb-input">
+                        <option value="">בחר דרגת פגיעות</option>
+                        <option value="low" <?php selected($current_vuln, 1); ?>>נמוכה</option>
+                        <option value="medium" <?php selected($current_vuln, 2); ?>>בינונית</option>
+                        <option value="high" <?php selected($current_vuln, 3); ?>>גבוהה</option>
+                    </select>
                 </div>
             </fieldset>
             
@@ -1137,8 +1187,6 @@ public function print_tree($cats, $parent, $table, $home_url) {
         $trash_url = $trash_page ? get_permalink($trash_page->ID) : '';
 
         $articles = $wpdb->get_results("SELECT * FROM $table WHERE (is_deleted IS NULL OR is_deleted=0) ORDER BY created_at DESC");
-        $status_labels = $this->get_status_labels();
-
         ob_start();
         ?>
         <div class="kb-container">
@@ -1158,49 +1206,16 @@ public function print_tree($cats, $parent, $table, $home_url) {
                 <button type="button" id="kb-table-search-clear">נקה</button>
             </div>
 
-            <div class="kb-table-filters">
-                <div class="kb-filter-group">
-                    <label for="kb-sort-field">מיין לפי:</label>
-                    <select id="kb-sort-field">
-                        <option value="subject">נושא</option>
-                        <option value="maincat">קטגוריה ראשית</option>
-                        <option value="subcat">תת קטגוריה</option>
-                        <option value="status">סטטוס</option>
-                        <option value="rating">דירוג</option>
-                    </select>
-                    <select id="kb-sort-direction">
-                        <option value="asc">עולה</option>
-                        <option value="desc">יורד</option>
-                    </select>
-                </div>
-                <div class="kb-filter-group">
-                    <label for="kb-filter-status">סינון סטטוס:</label>
-                    <select id="kb-filter-status">
-                        <option value="">הכל</option>
-                        <?php foreach($status_labels as $k=>$lbl): ?>
-                            <option value="<?php echo intval($k); ?>"><?php echo esc_html($lbl); ?></option>
-                        <?php endforeach; ?>
-                    </select>
-                </div>
-                <div class="kb-filter-group">
-                    <label for="kb-filter-execution">סינון ביצוע:</label>
-                    <select id="kb-filter-execution">
-                        <option value="">הכל</option>
-                        <option value="auto">אוטומטי</option>
-                        <option value="manual">ידני</option>
-                    </select>
-                </div>
-            </div>
-
             <table class="kb-table-view-table">
                 <thead>
                     <tr>
-                        <th>נושא</th>
-                        <th>קטגוריה ראשית</th>
-                        <th>תת קטגוריה</th>
-                        <th>נבדק</th>
-                        <th>דירוג</th>
-                        <th>ביצוע</th>
+                        <th class="kb-sortable" data-sort-key="subject">נושא</th>
+                        <th class="kb-sortable" data-sort-key="maincat">קטגוריה ראשית</th>
+                        <th class="kb-sortable" data-sort-key="subcat">תת קטגוריה</th>
+                        <th class="kb-sortable" data-sort-key="status">נבדק</th>
+                        <th class="kb-sortable" data-sort-key="rating">דירוג</th>
+                        <th class="kb-sortable" data-sort-key="execution">ביצוע</th>
+                        <th class="kb-sortable" data-sort-key="vulnerability">פגיעות</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -1211,17 +1226,20 @@ public function print_tree($cats, $parent, $table, $home_url) {
                     $trash_link = current_user_can('manage_options') ? wp_nonce_url(add_query_arg(['page_id'=>$page_id,'kb_pub_action'=>'trash','article_id'=>$article->id], $page_url), 'kb_pub_action_'.$article->id) : '';
                     $rating_value = $this->get_article_rating($article);
                     $execution_mode = $this->get_execution_mode($article);
+                    $vulnerability_label = $this->get_vulnerability_label($article);
+                    $vulnerability_level = $this->sanitize_vulnerability_level($article->vulnerability_level ?? null);
                 ?>
-                    <tr class="kb-table-row" data-article-id="<?php echo intval($article->id); ?>" data-subject="<?php echo esc_attr(mb_strtolower($article->subject)); ?>" data-maincat="<?php echo esc_attr(mb_strtolower($main_cat)); ?>" data-subcat="<?php echo esc_attr(mb_strtolower($sub_cat)); ?>" data-status="<?php echo intval($article->review_status); ?>" data-rating="<?php echo is_null($rating_value) ? '' : intval($rating_value); ?>" data-execution="<?php echo $execution_mode==='אוטומטי' ? 'auto' : 'manual'; ?>">
+                    <tr class="kb-table-row" data-article-id="<?php echo intval($article->id); ?>" data-subject="<?php echo esc_attr(mb_strtolower($article->subject)); ?>" data-maincat="<?php echo esc_attr(mb_strtolower($main_cat)); ?>" data-subcat="<?php echo esc_attr(mb_strtolower($sub_cat)); ?>" data-status="<?php echo intval($article->review_status); ?>" data-rating="<?php echo is_null($rating_value) ? '' : intval($rating_value); ?>" data-execution="<?php echo $execution_mode==='אוטומטי' ? 'auto' : 'manual'; ?>" data-vulnerability="<?php echo $vulnerability_level ? intval($vulnerability_level) : ''; ?>">
                         <td><?php echo esc_html($article->subject); ?></td>
                         <td><?php echo esc_html($main_cat); ?></td>
                         <td><?php echo esc_html($sub_cat); ?></td>
                         <td><?php echo $this->render_status_badge($article->review_status); ?></td>
                         <td><?php echo $this->render_rating_badge($article); ?></td>
                         <td><span class="kb-execution-chip <?php echo $execution_mode==='אוטומטי' ? 'kb-execution-auto' : 'kb-execution-manual'; ?>"><?php echo esc_html($execution_mode); ?></span></td>
+                        <td><?php echo $vulnerability_label ? esc_html($vulnerability_label) : ''; ?></td>
                     </tr>
                     <tr class="kb-table-row-detail" data-article-id="<?php echo intval($article->id); ?>" style="display:none;">
-                        <td colspan="6">
+                        <td colspan="7">
                             <div class="kb-detail-row-content">
                                 <div class="kb-detail-row-header">
                                     <h3><?php echo esc_html($article->subject); ?></h3>
@@ -1248,10 +1266,10 @@ public function print_tree($cats, $parent, $table, $home_url) {
         </div>
         <style>
         .kb-table-view-container { width:100%; max-width:100%; margin:20px auto; padding:10px; box-sizing:border-box; font-family:Arial,sans-serif; }
-        .kb-table-view-container .kb-btn { padding:10px 18px; border-radius:999px; border:1.4px solid #cbd5f5; cursor:pointer; text-decoration:none; display:inline-block; font-size:15px; font-weight:700; transition:all 0.2s; color:#2563eb; background:#fff; box-shadow:0 8px 18px rgba(37,99,235,0.08); }
-        .kb-table-view-container .kb-btn-primary { background:#2563eb; color:#fff; border-color:#2563eb; }
-        .kb-table-view-container .kb-btn-secondary { background:#fff; color:#2563eb; border-color:#cbd5f5; }
-        .kb-table-view-container .kb-btn-danger { background:#dc2626; color:#fff; border-color:#dc2626; box-shadow:0 8px 18px rgba(220,38,38,0.18); }
+        .kb-table-view-container .kb-btn { padding:10px 18px; border-radius:14px; border:1.6px solid #cbd5f5; cursor:pointer; text-decoration:none; display:inline-block; font-size:15px; font-weight:700; transition:all 0.2s; color:#0f172a; background:#fff; box-shadow:0 8px 18px rgba(15,23,42,0.08); }
+        .kb-table-view-container .kb-btn-primary { background:#2563eb; color:#fff; border-color:#2563eb; box-shadow:0 8px 18px rgba(37,99,235,0.18); }
+        .kb-table-view-container .kb-btn-secondary { background:#fff; color:#0f172a; border-color:#d1d5db; box-shadow:0 6px 14px rgba(15,23,42,0.08); }
+        .kb-table-view-container .kb-btn-danger { background:#e11d48; color:#fff; border-color:#e11d48; box-shadow:0 8px 18px rgba(225,29,72,0.18); }
         .kb-table-view-header { display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:15px; }
         .kb-table-view-header h1 { margin:0; color:#2c3e50; }
         .kb-table-view-actions { display:flex; gap:8px; flex-wrap:wrap; }
@@ -1259,15 +1277,14 @@ public function print_tree($cats, $parent, $table, $home_url) {
         .kb-table-search input { padding:10px 12px; border:1px solid #cbd5e1; border-radius:8px; min-width:220px; font-size:15px; }
         .kb-table-search button { padding:10px 14px; border:none; border-radius:8px; background:#e2e8f0; cursor:pointer; font-weight:700; color:#0f172a; }
         .kb-table-search button:hover { background:#cbd5e1; }
-        .kb-table-filters { display:flex; gap:12px; flex-wrap:wrap; align-items:flex-end; margin:0 0 14px 0; }
-        .kb-filter-group { display:flex; gap:6px; align-items:center; }
-        .kb-filter-group label { font-weight:700; color:#0f172a; }
-        .kb-filter-group select { padding:10px 12px; border:1px solid #cbd5e1; border-radius:8px; background:#fff; }
         .kb-btn-grey { background:#fff; color:#1f2937; border-color:#d1d5db; box-shadow:0 8px 18px rgba(15,23,42,0.08); }
         .kb-btn-grey:hover { background:#1f2937; color:#fff; border-color:#1f2937; }
         .kb-table-view-table { width:100%; border-collapse:collapse; background:#fff; box-shadow:0 2px 6px rgba(0,0,0,0.08); }
         .kb-table-view-table th, .kb-table-view-table td { padding:14px 12px; border-bottom:1px solid #e6e6e6; text-align:right; }
         .kb-table-view-table th { background:#f4f6f7; color:#2c3e50; font-weight:700; }
+        .kb-sortable { cursor:pointer; position:relative; }
+        .kb-sortable[data-sort-dir="asc"]::after { content:"▲"; font-size:0.75em; margin-right:6px; color:#475569; }
+        .kb-sortable[data-sort-dir="desc"]::after { content:"▼"; font-size:0.75em; margin-right:6px; color:#475569; }
         .kb-table-row { cursor:pointer; }
         .kb-table-row:hover { background:#f9fbff; }
         .kb-table-row-detail td { background:#f7f9fa; }
@@ -1283,10 +1300,10 @@ public function print_tree($cats, $parent, $table, $home_url) {
         .kb-meta-inline { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:10px; }
         .kb-meta-chip { background:#eef2f5; padding:6px 10px; border-radius:6px; color:#34495e; font-weight:600; }
         .kb-meta-status-chip .kb-status-badge { margin:0; }
-        .kb-execution-chip { padding:0; border-radius:0; font-weight:700; background:transparent; color:#0f172a; border:none; }
+        .kb-execution-chip { padding:0; border-radius:0; font-weight:600; background:transparent; color:#0f172a; border:none; }
         .kb-execution-auto { }
         .kb-execution-manual { }
-        .kb-rating-badge { display:inline-block; padding:6px 10px; background:transparent; color:#0f172a; border:none; border-radius:6px; font-weight:800; }
+        .kb-rating-badge { display:inline-block; padding:0; background:transparent; color:#0f172a; border:none; border-radius:0; font-weight:600; }
         .kb-btn-close { background:#34495e; }
         .kb-btn-close:hover { background:#2c3e50; }
         </style>
@@ -1312,15 +1329,10 @@ public function print_tree($cats, $parent, $table, $home_url) {
 
             function applyFilters(){
                 var query = (document.getElementById('kb-table-search').value || '').trim().toLowerCase();
-                var statusVal = (document.getElementById('kb-filter-status').value || '').toString();
-                var execVal = (document.getElementById('kb-filter-execution').value || '').toString();
 
                 rowPairs.forEach(function(pair){
                     var subject = pair.row.dataset.subject || '';
-                    var matchesSearch = subject.indexOf(query) !== -1;
-                    var matchesStatus = !statusVal || (pair.row.dataset.status === statusVal);
-                    var matchesExec = !execVal || (pair.row.dataset.execution === execVal);
-                    var visible = matchesSearch && matchesStatus && matchesExec;
+                    var visible = subject.indexOf(query) !== -1;
                     pair.row.style.display = visible ? '' : 'none';
                     if(pair.detail){
                         if(!visible){
@@ -1333,18 +1345,35 @@ public function print_tree($cats, $parent, $table, $home_url) {
                 });
             }
 
+            var sortState = { field: 'subject', dir: 'asc' };
+
             function getSortValue(row, field){
                 var val = row.dataset[field] || '';
                 if(field === 'rating'){
                     return val === '' ? -Infinity : parseInt(val, 10);
                 }
+                if(field === 'status' || field === 'vulnerability'){
+                    return val === '' ? -Infinity : parseInt(val, 10);
+                }
+                if(field === 'execution'){
+                    return val === 'auto' ? 1 : 0;
+                }
                 return val;
             }
 
+            function updateSortIndicators(){
+                document.querySelectorAll('.kb-sortable').forEach(function(th){
+                    th.dataset.sortDir = '';
+                    if(th.dataset.sortKey === sortState.field){
+                        th.dataset.sortDir = sortState.dir;
+                    }
+                });
+            }
+
             function applySort(){
-                var field = document.getElementById('kb-sort-field').value;
-                var dir = document.getElementById('kb-sort-direction').value === 'desc' ? -1 : 1;
                 var tbody = document.querySelector('.kb-table-view-table tbody');
+                var dir = sortState.dir === 'desc' ? -1 : 1;
+                var field = sortState.field;
                 rowPairs.sort(function(a,b){
                     var av = getSortValue(a.row, field);
                     var bv = getSortValue(b.row, field);
@@ -1355,6 +1384,7 @@ public function print_tree($cats, $parent, $table, $home_url) {
                     tbody.appendChild(pair.row);
                     if(pair.detail) tbody.appendChild(pair.detail);
                 });
+                updateSortIndicators();
             }
 
             rowPairs.forEach(function(pair){
@@ -1376,24 +1406,28 @@ public function print_tree($cats, $parent, $table, $home_url) {
             var searchInput = document.getElementById('kb-table-search');
             var clearBtn = document.getElementById('kb-table-search-clear');
             if(searchInput){
-                searchInput.addEventListener('input', function(){ applyFilters(); applySort(); });
+                searchInput.addEventListener('input', function(){ applyFilters(); });
             }
             if(clearBtn){
                 clearBtn.addEventListener('click', function(){
                     if(searchInput){
                         searchInput.value = '';
                         applyFilters();
-                        applySort();
                         searchInput.focus();
                     }
                 });
             }
 
-            ['kb-filter-status','kb-filter-execution','kb-sort-field','kb-sort-direction'].forEach(function(id){
-                var el = document.getElementById(id);
-                if(!el) return;
-                el.addEventListener('change', function(){
-                    applyFilters();
+            document.querySelectorAll('.kb-sortable').forEach(function(th){
+                th.addEventListener('click', function(){
+                    var key = this.dataset.sortKey;
+                    if(!key) return;
+                    if(sortState.field === key){
+                        sortState.dir = sortState.dir === 'asc' ? 'desc' : 'asc';
+                    } else {
+                        sortState.field = key;
+                        sortState.dir = 'asc';
+                    }
                     applySort();
                 });
             });
