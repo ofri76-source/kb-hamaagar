@@ -300,11 +300,11 @@ class KB_KnowledgeBase_Editor {
 
     private function render_navigation_bar($active = '') {
         $home_url = 'https://kb.macomp.co.il/?page_id=10852';
-        $table_url = 'https://kb.macomp.co.il/?page_id=10852&kb_table=1';
+        $table_url = 'https://kb.macomp.co.il/?page_id=14307';
         $trash_url = 'https://kb.macomp.co.il/?page_id=14309';
         $categories_url = 'https://kb.macomp.co.il/?page_id=11102';
         $archive_page = get_page_by_path('archive-bin');
-        $archive_url = $archive_page ? get_permalink($archive_page->ID) : 'https://kb.macomp.co.il/?page_id=20000';
+        $archive_url = $archive_page ? get_permalink($archive_page->ID) : 'https://kb.macomp.co.il/?page_id=14311';
 
         $links = [
             'home' => ['label' => 'ראשי', 'url' => $home_url],
@@ -1152,22 +1152,6 @@ public function print_tree($cats, $parent, $table, $home_url) {
                         <?php foreach($status_labels as $k=>$lbl) echo '<option value="'.intval($k).'" '.selected($current_status, $k, false).'>'.esc_html($lbl).'</option>'; ?>
                     </select>
                 </div>
-                <div class="kb-row"><label class="kb-label">סטטוס בדיקה:</label>
-                    <select name="review_status" class="kb-input">
-                        <?php foreach($status_labels as $k=>$lbl) echo '<option value="'.intval($k).'" '.selected($current_status, $k, false).'>'.esc_html($lbl).'</option>'; ?>
-                    </select>
-                </div>
-                <div class="kb-row"><label class="kb-label">דירוג:</label>
-                    <input type="number" name="user_rating" class="kb-input" min="1" max="100" value="<?php echo $current_rating ? intval($current_rating) : ''; ?>" placeholder="1-100">
-                </div>
-                <div class="kb-row"><label class="kb-label">פגיעות: <span class="kb-help-icon" data-tooltip="פגיעות של הארגון לשינוי">?</span></label>
-                    <select name="vulnerability_level" class="kb-input">
-                        <option value="">בחר דרגת פגיעות</option>
-                        <option value="low" <?php selected($current_vuln, 1); ?>>נמוכה</option>
-                        <option value="medium" <?php selected($current_vuln, 2); ?>>בינונית</option>
-                        <option value="high" <?php selected($current_vuln, 3); ?>>גבוהה</option>
-                    </select>
-                </div>
             </fieldset>
             
             <fieldset class="kb-fieldset">
@@ -1422,9 +1406,10 @@ public function print_tree($cats, $parent, $table, $home_url) {
         $trash_page = get_page_by_path('trash-bin');
         $trash_url = $trash_page ? get_permalink($trash_page->ID) : '';
         $archive_page = get_page_by_path('archive-bin');
-        $archive_url = $archive_page ? get_permalink($archive_page->ID) : '';
+        $archive_url = $archive_page ? get_permalink($archive_page->ID) : 'https://kb.macomp.co.il/?page_id=14311';
 
         $articles = $wpdb->get_results("SELECT * FROM $table WHERE (is_deleted IS NULL OR is_deleted=0) AND (is_archived IS NULL OR is_archived=0) ORDER BY created_at DESC");
+        $total_articles = count($articles);
         $status_labels = $this->get_status_labels();
         ob_start();
         ?>
@@ -1559,6 +1544,7 @@ public function print_tree($cats, $parent, $table, $home_url) {
                 </tbody>
             </table>
             </form>
+            <div class="kb-table-count">סה"כ מאמרים: <strong id="kb-table-count-number"><?php echo intval($total_articles); ?></strong></div>
         </div>
         </div>
         <style>
@@ -1616,6 +1602,7 @@ public function print_tree($cats, $parent, $table, $home_url) {
         .kb-rating-badge { display:inline-block; padding:0; background:transparent; color:#0f172a; border:none; border-radius:0; font-weight:500; }
         .kb-btn-close { background:#34495e; }
         .kb-btn-close:hover { background:#2c3e50; }
+        .kb-table-count { margin-top:10px; font-weight:600; color:#0f172a; text-align:right; }
         </style>
         <script>
         document.addEventListener('DOMContentLoaded', function(){
@@ -1692,6 +1679,32 @@ public function print_tree($cats, $parent, $table, $home_url) {
                 });
             }
 
+            var countEl = document.getElementById('kb-table-count-number');
+
+            function updateCount(){
+                if(!countEl) return;
+                var visibleRows = rowPairs.filter(function(pair){
+                    return pair.row.style.display !== 'none';
+                });
+                countEl.textContent = visibleRows.length;
+            }
+
+            var countEl = document.getElementById('kb-trash-count-number');
+
+            function updateCount(){
+                if(!countEl) return;
+                var visibleRows = rowPairs.filter(function(pair){ return pair.row.style.display !== 'none'; });
+                countEl.textContent = visibleRows.length;
+            }
+
+            var countEl = document.getElementById('kb-archive-count-number');
+
+            function updateCount(){
+                if(!countEl) return;
+                var visibleRows = rowPairs.filter(function(pair){ return pair.row.style.display !== 'none'; });
+                countEl.textContent = visibleRows.length;
+            }
+
             function applyFilters(){
                 rowPairs.forEach(function(pair){
                     var visible = matchesSelectedFilters(pair.row);
@@ -1706,6 +1719,7 @@ public function print_tree($cats, $parent, $table, $home_url) {
                     }
                 });
                 updateBulkState();
+                updateCount();
             }
 
             function closeMenus(exceptKey){
@@ -1901,11 +1915,12 @@ public function print_tree($cats, $parent, $table, $home_url) {
         $this->process_table_bulk_actions($page_url);
 
         $table_page = get_page_by_path('kb-table');
-        $table_url = $atts['table_url'] ? $atts['table_url'] : ($table_page ? get_permalink($table_page->ID) : '');
+        $table_url = $atts['table_url'] ? $atts['table_url'] : ($table_page ? get_permalink($table_page->ID) : 'https://kb.macomp.co.il/?page_id=14307');
         $back_url = $atts['back_url'];
 
         $articles = $wpdb->get_results("SELECT * FROM $table WHERE is_deleted=1 ORDER BY created_at DESC");
         $status_labels = $this->get_status_labels();
+        $total_articles = count($articles);
 
         ob_start();
         ?>
@@ -2040,6 +2055,7 @@ public function print_tree($cats, $parent, $table, $home_url) {
                 </tbody>
             </table>
             </form>
+            <div class="kb-table-count">סה"כ מאמרים: <strong id="kb-trash-count-number"><?php echo intval($total_articles); ?></strong></div>
         </div>
         </div>
         <style>
@@ -2093,6 +2109,7 @@ public function print_tree($cats, $parent, $table, $home_url) {
         .kb-rating-badge { display:inline-block; padding:0; background:transparent; color:#0f172a; border:none; border-radius:0; font-weight:500; }
         .kb-btn-close { background:#e2e8f0; color:#0f172a; }
         .kb-btn-close:hover { background:#cbd5e1; }
+        .kb-table-count { margin-top:10px; font-weight:600; color:#0f172a; text-align:right; }
         </style>
         <script>
         document.addEventListener('DOMContentLoaded', function(){
@@ -2178,6 +2195,7 @@ public function print_tree($cats, $parent, $table, $home_url) {
                     if(pair.detail) pair.detail.style.display = show && pair.detail.dataset.open === '1' ? 'table-row' : 'none';
                 });
                 updateBulkState();
+                updateCount();
             }
 
             function getSortValue(row, key){
@@ -2335,11 +2353,12 @@ public function print_tree($cats, $parent, $table, $home_url) {
         $this->process_table_bulk_actions($page_url);
 
         $table_page = get_page_by_path('kb-table');
-        $table_url = $atts['table_url'] ? $atts['table_url'] : ($table_page ? get_permalink($table_page->ID) : '');
+        $table_url = $atts['table_url'] ? $atts['table_url'] : ($table_page ? get_permalink($table_page->ID) : 'https://kb.macomp.co.il/?page_id=14307');
         $back_url = $atts['back_url'];
 
         $articles = $wpdb->get_results("SELECT * FROM $table WHERE (is_archived=1) AND (is_deleted IS NULL OR is_deleted=0) ORDER BY subject ASC");
         $status_labels = $this->get_status_labels();
+        $total_articles = count($articles);
 
         ob_start();
         ?>
@@ -2472,6 +2491,7 @@ public function print_tree($cats, $parent, $table, $home_url) {
                 </tbody>
             </table>
             </form>
+            <div class="kb-table-count">סה"כ מאמרים: <strong id="kb-archive-count-number"><?php echo intval($total_articles); ?></strong></div>
         </div>
         </div>
         <style>
@@ -2525,6 +2545,7 @@ public function print_tree($cats, $parent, $table, $home_url) {
         .kb-rating-badge { display:inline-block; padding:0; background:transparent; color:#0f172a; border:none; border-radius:0; font-weight:500; }
         .kb-btn-close { background:#e2e8f0; color:#0f172a; }
         .kb-btn-close:hover { background:#cbd5e1; }
+        .kb-table-count { margin-top:10px; font-weight:600; color:#0f172a; text-align:right; }
         </style>
         <script>
         document.addEventListener('DOMContentLoaded', function(){
@@ -2610,6 +2631,7 @@ public function print_tree($cats, $parent, $table, $home_url) {
                     if(pair.detail) pair.detail.style.display = show && pair.detail.dataset.open === '1' ? 'table-row' : 'none';
                 });
                 updateBulkState();
+                updateCount();
             }
 
             function getSortValue(row, key){
@@ -2898,7 +2920,7 @@ public function print_tree($cats, $parent, $table, $home_url) {
         
         $add_article_page = get_page_by_path('add-article');
         $add_article_url = $add_article_page ? get_permalink($add_article_page->ID) : home_url('/add-article/');
-        $table_view_url = add_query_arg(['page_id' => $page_id, 'kb_table' => 1], home_url('/'));
+        $table_view_url = 'https://kb.macomp.co.il/?page_id=14307';
 
         ob_start();
         ?>
