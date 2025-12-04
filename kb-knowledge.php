@@ -584,6 +584,7 @@ public function print_tree($cats, $parent, $table, $home_url) {
         $current_status = $article ? intval($article->review_status) : 0;
         $current_rating = $article ? intval($article->user_rating) : 0;
         $current_vuln = $article ? intval($article->vulnerability_level) : 0;
+        $current_vuln = $article ? intval($article->vulnerability_level) : 0;
 
         echo '<div class="wrap"><h1>' . ($article ? 'עריכת מאמר' : 'הוסף מאמר חדש') . '</h1>';
         echo '<form id="kb-article-form" class="kb-form" enctype="multipart/form-data">';
@@ -606,7 +607,7 @@ public function print_tree($cats, $parent, $table, $home_url) {
         echo '<div class="kb-row"><label class="kb-label">דירוג:</label>';
         echo '<input type="number" name="user_rating" class="kb-input" min="1" max="100" value="'.($current_rating ? intval($current_rating) : '').'" placeholder="1-100">';
         echo '</div>';
-        echo '<div class="kb-row"><label class="kb-label">פגיעות:</label>';
+        echo '<div class="kb-row"><label class="kb-label">פגיעות: <span class="kb-help-icon" data-tooltip="פגיעות של הארגון לשינוי">?</span></label>';
         echo '<select name="vulnerability_level" class="kb-input">';
         echo '<option value="">בחר דרגת פגיעות</option>';
         echo '<option value="low" '.($article && intval($article->vulnerability_level)===1 ? 'selected' : '').'>נמוכה</option>';
@@ -921,6 +922,7 @@ public function print_tree($cats, $parent, $table, $home_url) {
         $status_labels = $this->get_status_labels();
         $current_status = $article ? intval($article->review_status) : 0;
         $current_rating = $article ? intval($article->user_rating) : 0;
+        $current_vuln = $article ? intval($article->vulnerability_level) : 0;
 
         $kb_home_url = isset($_SERVER['HTTP_REFERER']) ? $_SERVER['HTTP_REFERER'] : get_permalink(get_the_ID());
         $kb_home_url = remove_query_arg('edit_article', $kb_home_url);
@@ -959,7 +961,7 @@ public function print_tree($cats, $parent, $table, $home_url) {
                 <div class="kb-row"><label class="kb-label">דירוג:</label>
                     <input type="number" name="user_rating" class="kb-input" min="1" max="100" value="<?php echo $current_rating ? intval($current_rating) : ''; ?>" placeholder="1-100">
                 </div>
-                <div class="kb-row"><label class="kb-label">פגיעות:</label>
+                <div class="kb-row"><label class="kb-label">פגיעות: <span class="kb-help-icon" data-tooltip="פגיעות של הארגון לשינוי">?</span></label>
                     <select name="vulnerability_level" class="kb-input">
                         <option value="">בחר דרגת פגיעות</option>
                         <option value="low" <?php selected($current_vuln, 1); ?>>נמוכה</option>
@@ -1187,6 +1189,7 @@ public function print_tree($cats, $parent, $table, $home_url) {
         $trash_url = $trash_page ? get_permalink($trash_page->ID) : '';
 
         $articles = $wpdb->get_results("SELECT * FROM $table WHERE (is_deleted IS NULL OR is_deleted=0) ORDER BY created_at DESC");
+        $status_labels = $this->get_status_labels();
         ob_start();
         ?>
         <div class="kb-container">
@@ -1209,13 +1212,55 @@ public function print_tree($cats, $parent, $table, $home_url) {
             <table class="kb-table-view-table">
                 <thead>
                     <tr>
-                        <th class="kb-sortable" data-sort-key="subject">נושא</th>
-                        <th class="kb-sortable" data-sort-key="maincat">קטגוריה ראשית</th>
-                        <th class="kb-sortable" data-sort-key="subcat">תת קטגוריה</th>
-                        <th class="kb-sortable" data-sort-key="status">נבדק</th>
-                        <th class="kb-sortable" data-sort-key="rating">דירוג</th>
-                        <th class="kb-sortable" data-sort-key="execution">ביצוע</th>
-                        <th class="kb-sortable" data-sort-key="vulnerability">פגיעות</th>
+                        <th class="kb-sortable" data-sort-key="subject">
+                            <div class="kb-th-inner">
+                                <span>נושא</span>
+                                <button type="button" class="kb-filter-toggle" data-filter-key="subjectLabel" aria-label="סינון נושא"><span class="kb-filter-caret">▼</span></button>
+                            </div>
+                            <div class="kb-filter-menu" data-filter-menu="subjectLabel"></div>
+                        </th>
+                        <th class="kb-sortable" data-sort-key="maincat">
+                            <div class="kb-th-inner">
+                                <span>קטגוריה ראשית</span>
+                                <button type="button" class="kb-filter-toggle" data-filter-key="maincatLabel" aria-label="סינון קטגוריה ראשית"><span class="kb-filter-caret">▼</span></button>
+                            </div>
+                            <div class="kb-filter-menu" data-filter-menu="maincatLabel"></div>
+                        </th>
+                        <th class="kb-sortable" data-sort-key="subcat">
+                            <div class="kb-th-inner">
+                                <span>תת קטגוריה</span>
+                                <button type="button" class="kb-filter-toggle" data-filter-key="subcatLabel" aria-label="סינון תת קטגוריה"><span class="kb-filter-caret">▼</span></button>
+                            </div>
+                            <div class="kb-filter-menu" data-filter-menu="subcatLabel"></div>
+                        </th>
+                        <th class="kb-sortable" data-sort-key="status">
+                            <div class="kb-th-inner">
+                                <span>נבדק</span>
+                                <button type="button" class="kb-filter-toggle" data-filter-key="statusLabel" aria-label="סינון סטטוס"><span class="kb-filter-caret">▼</span></button>
+                            </div>
+                            <div class="kb-filter-menu" data-filter-menu="statusLabel"></div>
+                        </th>
+                        <th class="kb-sortable" data-sort-key="rating">
+                            <div class="kb-th-inner">
+                                <span>דירוג</span>
+                                <button type="button" class="kb-filter-toggle" data-filter-key="rating" aria-label="סינון דירוג"><span class="kb-filter-caret">▼</span></button>
+                            </div>
+                            <div class="kb-filter-menu" data-filter-menu="rating"></div>
+                        </th>
+                        <th class="kb-sortable" data-sort-key="execution">
+                            <div class="kb-th-inner">
+                                <span>ביצוע</span>
+                                <button type="button" class="kb-filter-toggle" data-filter-key="executionLabel" aria-label="סינון סוג ביצוע"><span class="kb-filter-caret">▼</span></button>
+                            </div>
+                            <div class="kb-filter-menu" data-filter-menu="executionLabel"></div>
+                        </th>
+                        <th class="kb-sortable" data-sort-key="vulnerability">
+                            <div class="kb-th-inner">
+                                <span>פגיעות <span class="kb-help-icon" data-tooltip="פגיעות של הארגון לשינוי">?</span></span>
+                                <button type="button" class="kb-filter-toggle" data-filter-key="vulnerabilityLabel" aria-label="סינון פגיעות"><span class="kb-filter-caret">▼</span></button>
+                            </div>
+                            <div class="kb-filter-menu" data-filter-menu="vulnerabilityLabel"></div>
+                        </th>
                     </tr>
                 </thead>
                 <tbody>
@@ -1228,8 +1273,9 @@ public function print_tree($cats, $parent, $table, $home_url) {
                     $execution_mode = $this->get_execution_mode($article);
                     $vulnerability_label = $this->get_vulnerability_label($article);
                     $vulnerability_level = $this->sanitize_vulnerability_level($article->vulnerability_level ?? null);
+                    $status_label = isset($status_labels[$article->review_status]) ? $status_labels[$article->review_status] : '';
                 ?>
-                    <tr class="kb-table-row" data-article-id="<?php echo intval($article->id); ?>" data-subject="<?php echo esc_attr(mb_strtolower($article->subject)); ?>" data-maincat="<?php echo esc_attr(mb_strtolower($main_cat)); ?>" data-subcat="<?php echo esc_attr(mb_strtolower($sub_cat)); ?>" data-status="<?php echo intval($article->review_status); ?>" data-rating="<?php echo is_null($rating_value) ? '' : intval($rating_value); ?>" data-execution="<?php echo $execution_mode==='אוטומטי' ? 'auto' : 'manual'; ?>" data-vulnerability="<?php echo $vulnerability_level ? intval($vulnerability_level) : ''; ?>">
+                    <tr class="kb-table-row" data-article-id="<?php echo intval($article->id); ?>" data-subject="<?php echo esc_attr(mb_strtolower($article->subject)); ?>" data-subject-label="<?php echo esc_attr($article->subject); ?>" data-maincat="<?php echo esc_attr(mb_strtolower($main_cat)); ?>" data-maincat-label="<?php echo esc_attr($main_cat); ?>" data-subcat="<?php echo esc_attr(mb_strtolower($sub_cat)); ?>" data-subcat-label="<?php echo esc_attr($sub_cat); ?>" data-status="<?php echo intval($article->review_status); ?>" data-status-label="<?php echo esc_attr($status_label); ?>" data-rating="<?php echo is_null($rating_value) ? '' : intval($rating_value); ?>" data-execution="<?php echo $execution_mode==='אוטומטי' ? 'auto' : 'manual'; ?>" data-execution-label="<?php echo esc_attr($execution_mode); ?>" data-vulnerability="<?php echo $vulnerability_level ? intval($vulnerability_level) : ''; ?>" data-vulnerability-label="<?php echo esc_attr($vulnerability_label); ?>">
                         <td><?php echo esc_html($article->subject); ?></td>
                         <td><?php echo esc_html($main_cat); ?></td>
                         <td><?php echo esc_html($sub_cat); ?></td>
@@ -1266,10 +1312,10 @@ public function print_tree($cats, $parent, $table, $home_url) {
         </div>
         <style>
         .kb-table-view-container { width:100%; max-width:100%; margin:20px auto; padding:10px; box-sizing:border-box; font-family:Arial,sans-serif; }
-        .kb-table-view-container .kb-btn { padding:10px 18px; border-radius:14px; border:1.6px solid #cbd5f5; cursor:pointer; text-decoration:none; display:inline-block; font-size:15px; font-weight:700; transition:all 0.2s; color:#0f172a; background:#fff; box-shadow:0 8px 18px rgba(15,23,42,0.08); }
-        .kb-table-view-container .kb-btn-primary { background:#2563eb; color:#fff; border-color:#2563eb; box-shadow:0 8px 18px rgba(37,99,235,0.18); }
-        .kb-table-view-container .kb-btn-secondary { background:#fff; color:#0f172a; border-color:#d1d5db; box-shadow:0 6px 14px rgba(15,23,42,0.08); }
-        .kb-table-view-container .kb-btn-danger { background:#e11d48; color:#fff; border-color:#e11d48; box-shadow:0 8px 18px rgba(225,29,72,0.18); }
+        .kb-table-view-container .kb-btn { padding:10px 18px; border-radius:14px; border:1.6px solid #cbd5e1; cursor:pointer; text-decoration:none; display:inline-flex; align-items:center; gap:6px; font-size:15px; font-weight:800; transition:all 0.2s; color:#0f172a; background:#f1f5f9; box-shadow:0 6px 14px rgba(15,23,42,0.10); }
+        .kb-table-view-container .kb-btn-primary { background:#2563eb; color:#fff; border-color:#1d4ed8; box-shadow:0 10px 22px rgba(37,99,235,0.22); }
+        .kb-table-view-container .kb-btn-secondary { background:#fff; color:#0f172a; border-color:#cbd5e1; box-shadow:0 8px 18px rgba(15,23,42,0.10); }
+        .kb-table-view-container .kb-btn-danger { background:#dc2626; color:#fff; border-color:#b91c1c; box-shadow:0 10px 22px rgba(220,38,38,0.20); }
         .kb-table-view-header { display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:15px; }
         .kb-table-view-header h1 { margin:0; color:#2c3e50; }
         .kb-table-view-actions { display:flex; gap:8px; flex-wrap:wrap; }
@@ -1281,10 +1327,21 @@ public function print_tree($cats, $parent, $table, $home_url) {
         .kb-btn-grey:hover { background:#1f2937; color:#fff; border-color:#1f2937; }
         .kb-table-view-table { width:100%; border-collapse:collapse; background:#fff; box-shadow:0 2px 6px rgba(0,0,0,0.08); }
         .kb-table-view-table th, .kb-table-view-table td { padding:14px 12px; border-bottom:1px solid #e6e6e6; text-align:right; }
-        .kb-table-view-table th { background:#f4f6f7; color:#2c3e50; font-weight:700; }
+        .kb-table-view-table th { background:#f4f6f7; color:#2c3e50; font-weight:700; position:relative; }
         .kb-sortable { cursor:pointer; position:relative; }
         .kb-sortable[data-sort-dir="asc"]::after { content:"▲"; font-size:0.75em; margin-right:6px; color:#475569; }
         .kb-sortable[data-sort-dir="desc"]::after { content:"▼"; font-size:0.75em; margin-right:6px; color:#475569; }
+        .kb-th-inner { display:flex; align-items:center; gap:6px; }
+        .kb-filter-toggle { border:1px solid #cbd5e1; background:#fff; border-radius:8px; padding:4px 6px; cursor:pointer; font-weight:800; color:#0f172a; box-shadow:0 4px 10px rgba(15,23,42,.08); }
+        .kb-filter-toggle:hover { background:#e2e8f0; }
+        .kb-filter-caret { font-size:10px; }
+        .kb-filter-menu { position:absolute; top:100%; right:0; min-width:180px; background:#fff; border:1px solid #e2e8f0; border-radius:12px; padding:10px; box-shadow:0 14px 28px rgba(15,23,42,.18); display:none; z-index:25; text-align:right; }
+        .kb-filter-menu.is-open { display:block; }
+        .kb-filter-option { display:flex; align-items:center; gap:8px; margin-bottom:6px; color:#0f172a; font-weight:600; }
+        .kb-filter-option input { accent-color:#2563eb; }
+        .kb-filter-actions { text-align:left; margin-top:4px; }
+        .kb-filter-actions button { background:#f1f5f9; border:1px solid #cbd5e1; border-radius:8px; padding:6px 10px; cursor:pointer; font-weight:700; }
+        .kb-filter-actions button:hover { background:#e2e8f0; }
         .kb-table-row { cursor:pointer; }
         .kb-table-row:hover { background:#f9fbff; }
         .kb-table-row-detail td { background:#f7f9fa; }
@@ -1317,6 +1374,18 @@ public function print_tree($cats, $parent, $table, $home_url) {
                 };
             });
 
+            var filterState = {
+                subjectLabel: new Set(),
+                maincatLabel: new Set(),
+                subcatLabel: new Set(),
+                statusLabel: new Set(),
+                rating: new Set(),
+                executionLabel: new Set(),
+                vulnerabilityLabel: new Set()
+            };
+
+            var activeMenu = null;
+
             function toggleDetail(row){
                 var id = row.getAttribute('data-article-id');
                 var detail = document.querySelector('.kb-table-row-detail[data-article-id="'+id+'"]');
@@ -1327,12 +1396,22 @@ public function print_tree($cats, $parent, $table, $home_url) {
                 }
             }
 
-            function applyFilters(){
-                var query = (document.getElementById('kb-table-search').value || '').trim().toLowerCase();
+            function matchesSelectedFilters(row){
+                var subjectQuery = (document.getElementById('kb-table-search').value || '').trim().toLowerCase();
+                var subjectValue = (row.dataset.subject || '').toLowerCase();
+                if(subjectQuery && subjectValue.indexOf(subjectQuery) === -1) return false;
 
+                return Object.keys(filterState).every(function(key){
+                    var selected = filterState[key];
+                    if(!selected || selected.size === 0) return true;
+                    var val = row.dataset[key] || '';
+                    return val && selected.has(val);
+                });
+            }
+
+            function applyFilters(){
                 rowPairs.forEach(function(pair){
-                    var subject = pair.row.dataset.subject || '';
-                    var visible = subject.indexOf(query) !== -1;
+                    var visible = matchesSelectedFilters(pair.row);
                     pair.row.style.display = visible ? '' : 'none';
                     if(pair.detail){
                         if(!visible){
@@ -1343,6 +1422,68 @@ public function print_tree($cats, $parent, $table, $home_url) {
                         }
                     }
                 });
+            }
+
+            function closeMenus(exceptKey){
+                document.querySelectorAll('.kb-filter-menu').forEach(function(menu){
+                    if(exceptKey && menu.dataset.filterMenu === exceptKey){
+                        return;
+                    }
+                    menu.classList.remove('is-open');
+                });
+                activeMenu = exceptKey || null;
+            }
+
+            function renderMenuOptions(menu, key){
+                menu.innerHTML = '';
+                var values = [];
+                rowPairs.forEach(function(pair){
+                    var value = pair.row.dataset[key] || '';
+                    if(value && values.indexOf(value) === -1){
+                        values.push(value);
+                    }
+                });
+                if(key === 'rating'){
+                    values.sort(function(a,b){ return parseInt(a,10) - parseInt(b,10); });
+                } else {
+                    values.sort(function(a,b){ return a.localeCompare(b, 'he'); });
+                }
+
+                values.forEach(function(val){
+                    var option = document.createElement('label');
+                    option.className = 'kb-filter-option';
+                    var input = document.createElement('input');
+                    input.type = 'checkbox';
+                    input.value = val;
+                    input.checked = filterState[key] && filterState[key].has(val);
+                    input.addEventListener('change', function(){
+                        if(!filterState[key]) filterState[key] = new Set();
+                        if(this.checked){
+                            filterState[key].add(val);
+                        } else {
+                            filterState[key].delete(val);
+                        }
+                        applyFilters();
+                    });
+                    var text = document.createElement('span');
+                    text.textContent = val;
+                    option.appendChild(input);
+                    option.appendChild(text);
+                    menu.appendChild(option);
+                });
+
+                var actions = document.createElement('div');
+                actions.className = 'kb-filter-actions';
+                var clearBtn = document.createElement('button');
+                clearBtn.type = 'button';
+                clearBtn.textContent = 'נקה';
+                clearBtn.addEventListener('click', function(){
+                    filterState[key] = new Set();
+                    renderMenuOptions(menu, key);
+                    applyFilters();
+                });
+                actions.appendChild(clearBtn);
+                menu.appendChild(actions);
             }
 
             var sortState = { field: 'subject', dir: 'asc' };
@@ -1401,6 +1542,27 @@ public function print_tree($cats, $parent, $table, $home_url) {
                     var detail = document.querySelector('.kb-table-row-detail[data-article-id="'+id+'"]');
                     if(detail){ detail.style.display = 'none'; detail.dataset.open = '0'; }
                 });
+            });
+
+            document.querySelectorAll('.kb-filter-toggle').forEach(function(btn){
+                btn.addEventListener('click', function(e){
+                    e.stopPropagation();
+                    var key = this.dataset.filterKey;
+                    var menu = document.querySelector('.kb-filter-menu[data-filter-menu="'+key+'"][data-filter-menu]');
+                    if(!menu) return;
+                    if(activeMenu === key){
+                        closeMenus();
+                        return;
+                    }
+                    closeMenus(key);
+                    renderMenuOptions(menu, key);
+                    menu.classList.add('is-open');
+                });
+            });
+
+            document.addEventListener('click', function(e){
+                if(e.target.closest('.kb-filter-menu') || e.target.closest('.kb-filter-toggle')) return;
+                closeMenus();
             });
 
             var searchInput = document.getElementById('kb-table-search');
@@ -1513,11 +1675,11 @@ public function print_tree($cats, $parent, $table, $home_url) {
         </div>
         <style>
         .kb-table-view-container { width:100%; max-width:100%; margin:20px auto; padding:10px; box-sizing:border-box; font-family:Arial,sans-serif; }
-        .kb-table-view-container .kb-btn { padding:10px 18px; border-radius:999px; border:1.4px solid #cbd5f5; cursor:pointer; text-decoration:none; display:inline-block; font-size:15px; font-weight:700; transition:all 0.2s; color:#2563eb; background:#fff; box-shadow:0 8px 18px rgba(37,99,235,0.08); }
-        .kb-table-view-container .kb-btn-secondary { background:#fff; color:#2563eb; border-color:#cbd5f5; }
+        .kb-table-view-container .kb-btn { padding:10px 18px; border-radius:14px; border:1.6px solid #cbd5e1; cursor:pointer; text-decoration:none; display:inline-flex; align-items:center; gap:6px; font-size:15px; font-weight:800; transition:all 0.2s; color:#0f172a; background:#f1f5f9; box-shadow:0 6px 14px rgba(15,23,42,0.10); }
+        .kb-table-view-container .kb-btn-secondary { background:#fff; color:#0f172a; border-color:#cbd5e1; box-shadow:0 8px 18px rgba(15,23,42,0.10); }
         .kb-table-view-container .kb-btn-grey { background:#fff; color:#1f2937; border-color:#d1d5db; box-shadow:0 8px 18px rgba(15,23,42,0.08); }
         .kb-table-view-container .kb-btn-grey:hover { background:#1f2937; color:#fff; border-color:#1f2937; }
-        .kb-table-view-container .kb-btn-danger { background:#dc2626; color:#fff; border-color:#dc2626; box-shadow:0 8px 18px rgba(220,38,38,0.18); }
+        .kb-table-view-container .kb-btn-danger { background:#dc2626; color:#fff; border-color:#b91c1c; box-shadow:0 10px 22px rgba(220,38,38,0.20); }
         .kb-table-view-header { display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:15px; }
         .kb-table-view-header h1 { margin:0; color:#2c3e50; }
         .kb-table-view-actions { display:flex; gap:8px; flex-wrap:wrap; }
