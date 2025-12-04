@@ -280,7 +280,7 @@ class KB_KnowledgeBase_Editor {
     private function render_navigation_bar($active = '') {
         $links = [
             'home' => ['label' => 'ראשי', 'url' => 'https://kb.macomp.co.il/?page_id=10852'],
-            'table' => ['label' => 'טבלה', 'url' => 'https://kb.macomp.co.il/?page_id=10852&kb_table=1'],
+            'table' => ['label' => 'טבלה', 'url' => 'https://kb.macomp.co.il/?page_id=14307'],
             'trash' => ['label' => 'סל מחזור', 'url' => 'https://kb.macomp.co.il/?page_id=14309'],
             'categories' => ['label' => 'קטגוריות', 'url' => 'https://kb.macomp.co.il/?page_id=11102'],
         ];
