@@ -294,7 +294,7 @@ class KB_KnowledgeBase_Editor {
         $trash_url = 'https://kb.macomp.co.il/?page_id=14309';
         $categories_url = 'https://kb.macomp.co.il/?page_id=11102';
         $archive_page = get_page_by_path('archive-bin');
-        $archive_url = $archive_page ? get_permalink($archive_page->ID) : 'https://kb.macomp.co.il/?page_id=20000';
+        $archive_url = $archive_page ? get_permalink($archive_page->ID) : 'https://kb.macomp.co.il/?page_id=14311';
 
         $links = [
             'home' => ['label' => 'ראשי', 'url' => $home_url],
