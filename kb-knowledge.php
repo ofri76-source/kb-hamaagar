@@ -1152,6 +1152,22 @@ public function print_tree($cats, $parent, $table, $home_url) {
                         <?php foreach($status_labels as $k=>$lbl) echo '<option value="'.intval($k).'" '.selected($current_status, $k, false).'>'.esc_html($lbl).'</option>'; ?>
                     </select>
                 </div>
+                <div class="kb-row"><label class="kb-label">סטטוס בדיקה:</label>
+                    <select name="review_status" class="kb-input">
+                        <?php foreach($status_labels as $k=>$lbl) echo '<option value="'.intval($k).'" '.selected($current_status, $k, false).'>'.esc_html($lbl).'</option>'; ?>
+                    </select>
+                </div>
+                <div class="kb-row"><label class="kb-label">דירוג:</label>
+                    <input type="number" name="user_rating" class="kb-input" min="1" max="100" value="<?php echo $current_rating ? intval($current_rating) : ''; ?>" placeholder="1-100">
+                </div>
+                <div class="kb-row"><label class="kb-label">פגיעות: <span class="kb-help-icon" data-tooltip="פגיעות של הארגון לשינוי">?</span></label>
+                    <select name="vulnerability_level" class="kb-input">
+                        <option value="">בחר דרגת פגיעות</option>
+                        <option value="low" <?php selected($current_vuln, 1); ?>>נמוכה</option>
+                        <option value="medium" <?php selected($current_vuln, 2); ?>>בינונית</option>
+                        <option value="high" <?php selected($current_vuln, 3); ?>>גבוהה</option>
+                    </select>
+                </div>
             </fieldset>
             
             <fieldset class="kb-fieldset">
