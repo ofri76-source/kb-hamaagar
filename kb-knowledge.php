@@ -81,7 +81,9 @@ class KB_KnowledgeBase_Editor {
             if(function_exists('comet_cache_disable')) {
                 comet_cache_disable();
             }
-            nocache_headers();
+            if (!headers_sent()) {
+                nocache_headers();
+            }
         }
     }
 
