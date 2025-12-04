@@ -8,7 +8,17 @@ Version: 20.0 BUGS FIXED FINAL
 if (!defined('ABSPATH')) exit;
 
 class KB_KnowledgeBase_Editor {
-    
+
+    /**
+     * Determine whether the current user can edit articles from the public views.
+     * Falls back to standard authoring capabilities (edit_posts) and admin access.
+     *
+     * @return bool
+     */
+    public function user_can_edit_article() {
+        return current_user_can('manage_options') || current_user_can('edit_posts');
+    }
+
     public function __construct() {
         add_action('admin_menu', [$this, 'add_menu']);
         add_action('admin_enqueue_scripts', [$this, 'enqueue_scripts']);
@@ -290,11 +300,11 @@ class KB_KnowledgeBase_Editor {
 
     private function render_navigation_bar($active = '') {
         $home_url = 'https://kb.macomp.co.il/?page_id=10852';
-        $table_url = 'https://kb.macomp.co.il/?page_id=14307';
+        $table_url = 'https://kb.macomp.co.il/?page_id=10852&kb_table=1';
         $trash_url = 'https://kb.macomp.co.il/?page_id=14309';
         $categories_url = 'https://kb.macomp.co.il/?page_id=11102';
         $archive_page = get_page_by_path('archive-bin');
-        $archive_url = $archive_page ? get_permalink($archive_page->ID) : 'https://kb.macomp.co.il/?page_id=14311';
+        $archive_url = $archive_page ? get_permalink($archive_page->ID) : 'https://kb.macomp.co.il/?page_id=20000';
 
         $links = [
             'home' => ['label' => 'ראשי', 'url' => $home_url],
