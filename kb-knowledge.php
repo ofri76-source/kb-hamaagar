@@ -546,6 +546,12 @@ class KB_KnowledgeBase_Editor {
 
         $target = $redirect_url ? $redirect_url : home_url($_SERVER['REQUEST_URI']);
         $target = remove_query_arg(['kb_pub_action','article_id','_wpnonce'], $target);
+
+        if (headers_sent()) {
+            echo '<script>window.location.href=' . json_encode($target) . ';</script>';
+            exit;
+        }
+
         wp_safe_redirect($target);
         exit;
     }
@@ -576,6 +582,11 @@ class KB_KnowledgeBase_Editor {
         }
 
         if($redirect_url) {
+            if (headers_sent()) {
+                echo '<script>window.location.href=' . json_encode($redirect_url) . ';</script>';
+                exit;
+            }
+
             wp_safe_redirect($redirect_url);
             exit;
         }
