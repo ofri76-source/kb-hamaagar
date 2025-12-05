@@ -180,6 +180,7 @@ class KB_KnowledgeBase_Editor {
     }
 
     public function enqueue_scripts($hook) {
+        wp_enqueue_style('kb-style', plugins_url('css/style.css', __FILE__), [], time());
         wp_enqueue_script('ckeditor5', 'https://cdn.ckeditor.com/ckeditor5/40.1.0/classic/ckeditor.js', [], '40.1.0');
         wp_localize_script('ckeditor5', 'kbAjax', [
             'ajaxurl' => admin_url('admin-ajax.php'),
