@@ -39,6 +39,8 @@ class KB_KnowledgeBase_Editor {
         add_action('wp_ajax_nopriv_kb_update_order', [$this, 'ajax_update_order']);
         add_action('wp_ajax_kb_check_subject', [$this, 'ajax_check_subject']);
                 add_action('wp_ajax_nopriv_kb_check_subject', [$this, 'ajax_check_subject']);
+        add_action('wp_ajax_kb_save_bulk_articles', [$this, 'save_bulk_articles']);
+        add_action('wp_ajax_nopriv_kb_save_bulk_articles', [$this, 'save_bulk_articles']);
         add_shortcode('kb_categories_tree', [$this, 'shortcode_tree']);
         add_shortcode('kb_articles_table', [$this, 'articles_table_shortcode']);
         add_shortcode('kb_trash_bin', [$this, 'trash_bin_shortcode']);
@@ -48,6 +50,7 @@ class KB_KnowledgeBase_Editor {
         
         register_activation_hook(__FILE__, [$this, 'create_table']);
         add_shortcode('kb_public_form', [$this, 'public_form_shortcode']);
+        add_shortcode('kb_bulk_public_form', [$this, 'public_form_shortcode']);
         add_shortcode('kb_home_page', [$this, 'home_page_shortcode']);
         $this->create_table();
     }
@@ -307,12 +310,14 @@ class KB_KnowledgeBase_Editor {
         $table_url = 'https://kb.macomp.co.il/?page_id=14307';
         $trash_url = 'https://kb.macomp.co.il/?page_id=14309';
         $categories_url = 'https://kb.macomp.co.il/?page_id=11102';
+        $bulk_url = 'https://kb.macomp.co.il/?page_id=14313';
         $archive_page = get_page_by_path('archive-bin');
         $archive_url = $archive_page ? get_permalink($archive_page->ID) : 'https://kb.macomp.co.il/?page_id=14311';
 
         $links = [
             'home' => ['label' => 'ראשי', 'url' => $home_url],
             'table' => ['label' => 'טבלה', 'url' => $table_url],
+            'bulk' => ['label' => 'עריכה קבוצתית', 'url' => $bulk_url],
             'archive' => ['label' => 'ארכיון', 'url' => $archive_url],
             'trash' => ['label' => 'סל מחזור', 'url' => $trash_url],
             'categories' => ['label' => 'קטגוריות', 'url' => $categories_url],
@@ -1080,6 +1085,85 @@ public function print_tree($cats, $parent, $table, $home_url) {
         wp_send_json_success();
     }
 
+    public function save_bulk_articles() {
+        check_ajax_referer('kb_bulk_save', 'nonce');
+        global $wpdb;
+
+        if(!$this->user_can_edit_article()) {
+            wp_send_json_error(['message' => 'אין לך הרשאות לשמור מאמרים']);
+        }
+
+        $raw = isset($_POST['articles']) ? wp_unslash($_POST['articles']) : '';
+        $articles = $raw ? json_decode($raw, true) : [];
+        if(!is_array($articles)) {
+            wp_send_json_error(['message' => 'לא התקבלו נתונים תקינים']);
+        }
+
+        $created = 0;
+        $errors = [];
+        $status_labels = $this->get_status_labels();
+        $row_num = 0;
+
+        foreach($articles as $item) {
+            $row_num++;
+            $subject = isset($item['subject']) ? sanitize_text_field($item['subject']) : '';
+            $tech_solution = isset($item['technical_solution']) ? wp_kses_post($item['technical_solution']) : '';
+            if(!$subject) {
+                $errors[] = "שורה {$row_num}: חסר נושא";
+                continue;
+            }
+            if(!$tech_solution || $tech_solution === '<p>&nbsp;</p>' || $tech_solution === '<p></p>') {
+                $errors[] = "שורה {$row_num}: יש למלא פתרון טכני";
+                continue;
+            }
+
+            $main_cat_id = isset($item['main_category_id']) ? intval($item['main_category_id']) : 0;
+            $sub_cat_id = isset($item['sub_category_id']) ? intval($item['sub_category_id']) : 0;
+            $category = $this->build_category_value($main_cat_id, $sub_cat_id);
+            if(!$category) {
+                $errors[] = "שורה {$row_num}: יש לבחור קטגוריה";
+                continue;
+            }
+
+            $existing = $wpdb->get_var($wpdb->prepare("SELECT id FROM {$wpdb->prefix}kb_articles WHERE subject = %s", $subject));
+            if($existing) {
+                $errors[] = "שורה {$row_num}: נושא קיים כבר";
+                continue;
+            }
+
+            $status = isset($item['review_status']) ? intval($item['review_status']) : 0;
+            if($status < 0 || $status > 2) { $status = 0; }
+
+            $user_rating = isset($item['user_rating']) && $item['user_rating'] !== '' ? intval($item['user_rating']) : null;
+            if(!is_null($user_rating) && ($user_rating < 1 || $user_rating > 100)) { $user_rating = null; }
+
+            $vulnerability_level = isset($item['vulnerability_level']) ? $this->sanitize_vulnerability_level($item['vulnerability_level']) : null;
+
+            $data = [
+                'subject' => $subject,
+                'category' => $category,
+                'technical_solution' => $tech_solution,
+                'review_status' => $status,
+                'user_rating' => $user_rating,
+                'vulnerability_level' => $vulnerability_level,
+            ];
+
+            $text_fields = [
+                'short_desc','technical_desc','solution_script','post_check','check_script','links'
+            ];
+            foreach($text_fields as $f) {
+                if(isset($item[$f]) && $item[$f] !== '') {
+                    $data[$f] = wp_kses_post($item[$f]);
+                }
+            }
+
+            $wpdb->insert($wpdb->prefix.'kb_articles', $data);
+            $created++;
+        }
+
+        wp_send_json_success(['created' => $created, 'errors' => $errors]);
+    }
+
     public function upload_image() {
         check_ajax_referer('kbnonce', 'nonce');
 
@@ -1122,7 +1206,15 @@ public function print_tree($cats, $parent, $table, $home_url) {
         wp_send_json_error(['message' => 'Upload failed']);
     }
 
-    public function public_form_shortcode() {
+    public function public_form_shortcode($atts = []) {
+        $atts = shortcode_atts([
+            'mode' => 'single'
+        ], $atts, 'kb_public_form');
+
+        if(isset($atts['mode']) && $atts['mode'] === 'grid') {
+            return $this->bulk_public_form_shortcode();
+        }
+
         global $wpdb;
         list($main_cats, $sub_cats_map, $cats_by_name) = $this->get_category_hierarchy();
 
@@ -1420,6 +1512,205 @@ public function print_tree($cats, $parent, $table, $home_url) {
             document.getElementById("pub-save-new-btn").addEventListener("click", function(){ saveArticle(true); });
             document.getElementById("pub-save-btn2").addEventListener("click", function(){ saveArticle(false); });
             document.getElementById("pub-save-new-btn2").addEventListener("click", function(){ saveArticle(true); });
+        });
+        </script>
+        <?php
+        return ob_get_clean();
+    }
+
+    public function bulk_public_form_shortcode() {
+        list($main_cats, $sub_cats_map, $cats_by_name) = $this->get_category_hierarchy();
+        $status_labels = $this->get_status_labels();
+        $bulk_nonce = wp_create_nonce('kb_bulk_save');
+
+        ob_start();
+        ?>
+        <div class="kb-container">
+            <?php echo $this->render_navigation_bar('bulk'); ?>
+            <div class="kb-bulk-header">
+                <div>
+                    <h2>עריכה קבוצתית</h2>
+                    <p class="kb-bulk-subtitle">הזינו כמה מאמרים במקביל. כל השדות נמצאים בשורות גלילה רוחבית ותומכים בהדבקת תמונות ב-CKEditor.</p>
+                </div>
+                <div class="kb-bulk-actions">
+                    <button type="button" id="kb-bulk-add-row" class="kb-btn kb-btn-secondary">➕ הוסף שורה</button>
+                    <button type="button" id="kb-bulk-save" class="kb-btn kb-btn-primary">💾 שמור את כל השורות</button>
+                </div>
+            </div>
+
+            <div class="kb-bulk-grid-wrapper">
+                <table class="kb-bulk-grid">
+                    <thead>
+                        <tr>
+                            <th>נושא*</th>
+                            <th>קטגוריה</th>
+                            <th>תת קטגוריה</th>
+                            <th>דירוג (1-100)</th>
+                            <th>פגיעות</th>
+                            <th>סטטוס</th>
+                            <th>תיאור קצר</th>
+                            <th>תיאור טכני</th>
+                            <th>פתרון טכני*</th>
+                            <th>סקריפט פתרון</th>
+                            <th>בדיקה</th>
+                            <th>סקריפט בדיקה</th>
+                            <th>קישורים</th>
+                        </tr>
+                    </thead>
+                    <tbody id="kb-bulk-body"></tbody>
+                </table>
+            </div>
+            <div id="kb-bulk-message" class="kb-bulk-message" aria-live="polite"></div>
+        </div>
+
+        <script>
+        document.addEventListener('DOMContentLoaded', function(){
+            const catData = {
+                main: <?php echo wp_json_encode($main_cats); ?>,
+                subs: <?php echo wp_json_encode($sub_cats_map); ?>
+            };
+            const statusLabels = <?php echo wp_json_encode($status_labels); ?>;
+            const bodyEl = document.getElementById('kb-bulk-body');
+            let rowIdx = 0;
+
+            if(!window.kbUploadAdapterDefined){
+                class MyUploadAdapter {
+                    constructor(loader){ this.loader = loader; }
+                    upload(){
+                        return this.loader.file.then(file => new Promise((resolve, reject)=>{
+                            const reader = new FileReader();
+                            reader.onload = () => {
+                                const fd = new FormData();
+                                fd.append('action','kb_upload_image');
+                                fd.append('nonce', kbAjax.nonce);
+                                fd.append('imagedata', reader.result);
+                                fetch(kbAjax.ajaxurl, { method:'POST', body: fd })
+                                    .then(res => res.json())
+                                    .then(json => { if(json.success) resolve({default: json.data.url}); else reject('Upload failed'); })
+                                    .catch(err => reject(err));
+                            };
+                            reader.readAsDataURL(file);
+                        }));
+                    }
+                    abort(){}
+                }
+                function MyCustomUploadAdapterPlugin(editor){
+                    editor.plugins.get('FileRepository').createUploadAdapter = (loader) => new MyUploadAdapter(loader);
+                }
+                window.MyCustomUploadAdapterPlugin = MyCustomUploadAdapterPlugin;
+                window.kbUploadAdapterDefined = true;
+            }
+
+            function populateSubs(select, parentId) {
+                select.innerHTML = '<option value="">בחר תת קטגוריה</option>';
+                if(parentId && catData.subs[parentId]) {
+                    catData.subs[parentId].forEach(cat => {
+                        const opt = document.createElement('option');
+                        opt.value = cat.id;
+                        opt.textContent = cat.category_name;
+                        select.appendChild(opt);
+                    });
+                }
+            }
+
+            function initEditors(scope){
+                scope.querySelectorAll('.kb-grid-ckeditor').forEach(el => {
+                    if(el.classList.contains('ck-initialized')) return;
+                    ClassicEditor.create(el, { extraPlugins: [MyCustomUploadAdapterPlugin] })
+                        .then(ed => { el.classList.add('ck-initialized'); el.editorInstance = ed; })
+                        .catch(err => console.error(err));
+                });
+            }
+
+            function createRow(){
+                rowIdx++;
+                const tr = document.createElement('tr');
+                tr.dataset.row = rowIdx;
+                tr.innerHTML = `
+                    <td><input type="text" name="subject" class="kb-input" placeholder="נושא" required></td>
+                    <td>
+                        <select name="main_category_id" class="kb-input">
+                            <option value="">בחר קטגוריה</option>
+                            ${catData.main.map(cat=>`<option value="${cat.id}">${cat.category_name}</option>`).join('')}
+                        </select>
+                    </td>
+                    <td>
+                        <select name="sub_category_id" class="kb-input"><option value="">בחר תת קטגוריה</option></select>
+                    </td>
+                    <td><input type="number" name="user_rating" class="kb-input" min="1" max="100" placeholder="1-100"></td>
+                    <td>
+                        <select name="vulnerability_level" class="kb-input">
+                            <option value="">בחר</option>
+                            <option value="low">נמוכה</option>
+                            <option value="medium">בינונית</option>
+                            <option value="high">גבוהה</option>
+                        </select>
+                    </td>
+                    <td>
+                        <select name="review_status" class="kb-input">
+                            ${Object.keys(statusLabels).map(key=>`<option value="${key}">${statusLabels[key]}</option>`).join('')}
+                        </select>
+                    </td>
+                    <td><textarea name="short_desc" class="kb-grid-ckeditor"></textarea></td>
+                    <td><textarea name="technical_desc" class="kb-grid-ckeditor"></textarea></td>
+                    <td><textarea name="technical_solution" class="kb-grid-ckeditor" required></textarea></td>
+                    <td><textarea name="solution_script" class="kb-input kb-grid-code" dir="ltr"></textarea></td>
+                    <td><textarea name="post_check" class="kb-grid-ckeditor"></textarea></td>
+                    <td><textarea name="check_script" class="kb-input kb-grid-code" dir="ltr"></textarea></td>
+                    <td><textarea name="links" class="kb-input"></textarea></td>
+                `;
+                bodyEl.appendChild(tr);
+
+                const mainSel = tr.querySelector('select[name="main_category_id"]');
+                const subSel = tr.querySelector('select[name="sub_category_id"]');
+                mainSel.addEventListener('change', ()=>populateSubs(subSel, mainSel.value));
+                initEditors(tr);
+            }
+
+            document.getElementById('kb-bulk-add-row').addEventListener('click', createRow);
+            createRow();
+
+            document.getElementById('kb-bulk-save').addEventListener('click', function(){
+                const rows = Array.from(bodyEl.querySelectorAll('tr'));
+                const payload = [];
+                rows.forEach(tr => {
+                    const item = {};
+                    tr.querySelectorAll('input, select, textarea').forEach(el => {
+                        if(el.classList.contains('kb-grid-ckeditor')) {
+                            item[el.name] = el.editorInstance ? el.editorInstance.getData() : el.value;
+                        } else {
+                            item[el.name] = el.value;
+                        }
+                    });
+                    payload.push(item);
+                });
+
+                const fd = new FormData();
+                fd.append('action', 'kb_save_bulk_articles');
+                fd.append('nonce', '<?php echo esc_js($bulk_nonce); ?>');
+                fd.append('articles', JSON.stringify(payload));
+
+                fetch(kbAjax.ajaxurl, { method:'POST', body: fd })
+                    .then(res => res.json())
+                    .then(json => {
+                        if(json.success) {
+                            const created = json.data.created || 0;
+                            const errs = json.data.errors || [];
+                            let msg = `✓ נשמרו ${created} מאמרים.`;
+                            if(errs.length) { msg += '<br>' + errs.join('<br>'); }
+                            document.getElementById('kb-bulk-message').innerHTML = msg;
+                            document.getElementById('kb-bulk-message').classList.add('kb-bulk-message--success');
+                        } else {
+                            const errMsg = (json.data && json.data.message) ? json.data.message : 'שמירה נכשלה';
+                            document.getElementById('kb-bulk-message').innerHTML = '❌ ' + errMsg;
+                            document.getElementById('kb-bulk-message').classList.remove('kb-bulk-message--success');
+                        }
+                    })
+                    .catch(()=>{
+                        document.getElementById('kb-bulk-message').innerHTML = '❌ שגיאה בבקשה';
+                        document.getElementById('kb-bulk-message').classList.remove('kb-bulk-message--success');
+                    });
+            });
         });
         </script>
         <?php
