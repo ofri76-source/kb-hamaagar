@@ -530,6 +530,17 @@ class KB_KnowledgeBase_Editor {
         }, $content);
     }
 
+    private function flatten_docx_html_text($html) {
+        if($html === '') return '';
+        $text = preg_replace('/<\/(p|div)>/i', "\n", $html);
+        $text = preg_replace('/<br\s*\/>/i', "\n", $text);
+        $text = preg_replace('/<br\s*>/i', "\n", $text);
+        $text = wp_strip_all_tags($text);
+        $text = html_entity_decode($text, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+        $text = preg_replace("/\n{3,}/", "\n\n", $text);
+        return trim($text);
+    }
+
     private function upload_docx_images($zip, $rels, $used_images) {
         $uploaded = [];
         if(!$zip instanceof ZipArchive) return $uploaded;
@@ -816,7 +827,11 @@ XML;
             foreach($content_fields as $field) {
                 $raw = isset($article['sections'][$field]) ? implode('', $article['sections'][$field]) : '';
                 $raw = $this->replace_docx_placeholders($raw, $image_urls);
-                $prepared[$field] = wp_kses_post($raw);
+                if(in_array($field, ['solution_script','check_script','post_check'], true)) {
+                    $prepared[$field] = $this->flatten_docx_html_text($raw);
+                } else {
+                    $prepared[$field] = wp_kses_post($raw);
+                }
             }
 
             $rating = isset($article['user_rating']) ? intval($article['user_rating']) : null;
