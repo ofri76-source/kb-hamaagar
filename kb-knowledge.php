@@ -732,13 +732,20 @@ XML;
 
         $lines = [
             '[[ARTICLE]]',
-            'Subject: הדגמת מאמר',
-            'Category: שרתים',
-            'Subcategory: לינוקס',
-            'Review Status: לא נבדק',
-            'Vulnerability: נמוכה',
-            'Rating: 90',
-            'Links: https://example.com',
+            'Subject:',
+            '',
+            'Category:',
+            '',
+            'Subcategory:',
+            '',
+            'Review Status:',
+            '',
+            'Vulnerability:',
+            '',
+            'Rating:',
+            '',
+            'Links:',
+            '',
             'Short Description:',
             'Technical Description:',
             'Technical Solution:',
@@ -751,7 +758,7 @@ XML;
         foreach($lines as $line) {
             $paragraphs .= '<w:p><w:r><w:t>'.htmlspecialchars($line, ENT_XML1).'</w:t></w:r></w:p>';
             if(strpos($line, ':') !== false && substr($line, -1) === ':') {
-                $paragraphs .= '<w:p><w:r><w:t xml:space="preserve">הקלד כאן את התוכן (אפשר לשלב תמונות)</w:t></w:r></w:p>';
+                $paragraphs .= '<w:p><w:r><w:t xml:space="preserve"> </w:t></w:r></w:p>';
             }
         }
 

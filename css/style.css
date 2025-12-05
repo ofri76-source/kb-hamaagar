@@ -189,7 +189,9 @@
 }
 .kb-bulk-grid-wrapper {
   width: 100%;
-  overflow-x: auto;
+  max-width: 100%;
+  display: block;
+  overflow-x: auto !important;
   overflow-y: auto;
   border: 1px solid #e5e7eb;
   border-radius: 12px;
@@ -199,7 +201,7 @@
 }
 .kb-bulk-grid {
   width: max-content;
-  min-width: 1800px;
+  min-width: 2200px;
   border-collapse: collapse;
   background: #fff;
 }
