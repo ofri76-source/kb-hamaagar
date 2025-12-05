@@ -50,7 +50,8 @@ class KB_KnowledgeBase_Editor {
         
         register_activation_hook(__FILE__, [$this, 'create_table']);
         add_shortcode('kb_public_form', [$this, 'public_form_shortcode']);
-        add_shortcode('kb_bulk_public_form', [$this, 'public_form_shortcode']);
+        // bulk grid editor shortcode (renamed to avoid conflicts)
+        add_shortcode('kb_public_grid', [$this, 'bulk_public_form_shortcode']);
         add_shortcode('kb_home_page', [$this, 'home_page_shortcode']);
         $this->create_table();
     }
