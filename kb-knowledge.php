@@ -1338,7 +1338,7 @@ XML;
         }
         echo '</select></div>';
         echo '<div class="kb-row"><label class="kb-label">תת קטגוריה:</label>
-            <select name="sub_category_id" class="kb-input">';
+            <select name="sub_category_id" class="kb-input" required>';
         echo '<option value="">בחר תת קטגוריה</option>';
         if($selected_main_id && isset($sub_cats_map[$selected_main_id])) {
             foreach($sub_cats_map[$selected_main_id] as $cat) {
@@ -1527,6 +1527,8 @@ XML;
                 let techSolution = document.querySelector("#technical_solution").editorInstance ?
                     document.querySelector("#technical_solution").editorInstance.getData().trim() : "";
                 let mainCat = document.querySelector('[name="main_category_id"]') ? document.querySelector('[name="main_category_id"]').value : '';
+                let subCat = document.querySelector('[name="sub_category_id"]') ? document.querySelector('[name="sub_category_id"]').value : '';
+                let subCat = document.querySelector('[name="sub_category_id"]') ? document.querySelector('[name="sub_category_id"]').value : '';
 
                 if(!subject) {
                     alert("❌ שדה נושא הוא שדה חובה!");
@@ -1534,7 +1536,12 @@ XML;
                 }
 
                 if(!mainCat) {
-                    alert("❌ יש לבחור קטגוריה ראשית למאמר!");
+                    alert("❌ יש לבחור קטגוריה למאמר!");
+                    return;
+                }
+
+                if(!subCat) {
+                    alert("❌ יש לבחור תת קטגוריה למאמר!");
                     return;
                 }
 
@@ -1643,10 +1650,13 @@ XML;
 
         $main_cat_id = isset($_POST['main_category_id']) ? intval($_POST['main_category_id']) : 0;
         $sub_cat_id = isset($_POST['sub_category_id']) ? intval($_POST['sub_category_id']) : 0;
-        $data['category'] = $this->build_category_value($main_cat_id, $sub_cat_id);
-        if(empty($data['category'])) {
-            wp_send_json_error(['message' => 'יש לבחור קטגוריה ראשית למאמר']);
+        if(!$main_cat_id) {
+            wp_send_json_error(['message' => 'יש לבחור קטגוריה למאמר']);
         }
+        if(!$sub_cat_id) {
+            wp_send_json_error(['message' => 'יש לבחור תת קטגוריה למאמר']);
+        }
+        $data['category'] = $this->build_category_value($main_cat_id, $sub_cat_id);
 
         $data['review_status'] = $status;
         $data['user_rating'] = $user_rating;
@@ -1738,11 +1748,11 @@ XML;
 
             $main_cat_id = isset($item['main_category_id']) ? intval($item['main_category_id']) : 0;
             $sub_cat_id = isset($item['sub_category_id']) ? intval($item['sub_category_id']) : 0;
-            $category = $this->build_category_value($main_cat_id, $sub_cat_id);
-            if(!$category) {
-                $errors[] = "שורה {$row_num}: יש לבחור קטגוריה";
+            if(!$main_cat_id || !$sub_cat_id) {
+                $errors[] = "שורה {$row_num}: יש לבחור קטגוריה ותת קטגוריה";
                 continue;
             }
+            $category = $this->build_category_value($main_cat_id, $sub_cat_id);
 
             $existing = $wpdb->get_var($wpdb->prepare("SELECT id FROM {$wpdb->prefix}kb_articles WHERE subject = %s", $subject));
             if($existing && (!$article_id || intval($existing) !== $article_id)) {
@@ -1940,8 +1950,8 @@ XML;
                         <?php foreach($main_cats as $cat) echo '<option value="'.intval($cat->id).'" '.selected($selected_main_id, $cat->id, false).'>'.esc_html($cat->category_name).'</option>'; ?>
                     </select>
                 </div>
-                <div class="kb-row"><label class="kb-label">תת קטגוריה:</label>
-                    <select name="sub_category_id" class="kb-input">
+                  <div class="kb-row"><label class="kb-label">תת קטגוריה:</label>
+                      <select name="sub_category_id" class="kb-input" required>
                         <option value="">בחר תת קטגוריה</option>
                         <?php if($selected_main_id && isset($sub_cats_map[$selected_main_id])) { foreach($sub_cats_map[$selected_main_id] as $cat) { echo '<option value="'.intval($cat->id).'" '.selected($selected_sub_id, $cat->id, false).'>'.esc_html($cat->category_name).'</option>'; } } ?>
                     </select>
@@ -2140,7 +2150,12 @@ XML;
                 }
 
                 if(!mainCat) {
-                    alert("❌ יש לבחור קטגוריה ראשית למאמר!");
+                    alert("❌ יש לבחור קטגוריה למאמר!");
+                    return;
+                }
+
+                if(!subCat) {
+                    alert("❌ יש לבחור תת קטגוריה למאמר!");
                     return;
                 }
 
@@ -2704,8 +2719,8 @@ XML;
                         </th>
                         <th class="kb-sortable" data-sort-key="maincat">
                             <div class="kb-th-inner">
-                                <span>קטגוריה ראשית</span>
-                                <button type="button" class="kb-filter-toggle" data-filter-key="maincatLabel" aria-label="סינון קטגוריה ראשית"><span class="kb-filter-caret">▼</span></button>
+                                <span>קטגוריה</span>
+                                <button type="button" class="kb-filter-toggle" data-filter-key="maincatLabel" aria-label="סינון קטגוריה"><span class="kb-filter-caret">▼</span></button>
                             </div>
                             <div class="kb-filter-menu" data-filter-menu="maincatLabel"></div>
                         </th>
@@ -3217,8 +3232,8 @@ XML;
                         </th>
                         <th class="kb-sortable" data-sort-key="maincat">
                             <div class="kb-th-inner">
-                                <span>קטגוריה ראשית</span>
-                                <button type="button" class="kb-filter-toggle" data-filter-key="maincatLabel" aria-label="סינון קטגוריה ראשית"><span class="kb-filter-caret">▼</span></button>
+                                <span>קטגוריה</span>
+                                <button type="button" class="kb-filter-toggle" data-filter-key="maincatLabel" aria-label="סינון קטגוריה"><span class="kb-filter-caret">▼</span></button>
                             </div>
                             <div class="kb-filter-menu" data-filter-menu="maincatLabel"></div>
                         </th>
@@ -3652,8 +3667,8 @@ XML;
                         </th>
                         <th class="kb-sortable" data-sort-key="maincat">
                             <div class="kb-th-inner">
-                                <span>קטגוריה ראשית</span>
-                                <button type="button" class="kb-filter-toggle" data-filter-key="maincatLabel" aria-label="סינון קטגוריה ראשית"><span class="kb-filter-caret">▼</span></button>
+                                <span>קטגוריה</span>
+                                <button type="button" class="kb-filter-toggle" data-filter-key="maincatLabel" aria-label="סינון קטגוריה"><span class="kb-filter-caret">▼</span></button>
                             </div>
                             <div class="kb-filter-menu" data-filter-menu="maincatLabel"></div>
                         </th>
