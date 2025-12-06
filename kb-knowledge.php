@@ -1215,16 +1215,6 @@ XML;
             exit;
         }
 
-        if($redirect_url) {
-            if (headers_sent()) {
-                echo '<script>window.location.href=' . json_encode($redirect_url) . ';</script>';
-                exit;
-            }
-
-            wp_safe_redirect($redirect_url);
-            exit;
-        }
-
         wp_send_json_success($result);
     }
 
