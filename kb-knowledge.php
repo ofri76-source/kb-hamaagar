@@ -35,6 +35,8 @@ class KB_KnowledgeBase_Editor {
         add_action('wp_ajax_nopriv_kb_add_category', [$this, 'ajax_add_category']);
         add_action('wp_ajax_kb_delete_category', [$this, 'ajax_delete_category']);
         add_action('wp_ajax_nopriv_kb_delete_category', [$this, 'ajax_delete_category']);
+        add_action('wp_ajax_kb_update_category', [$this, 'ajax_update_category']);
+        add_action('wp_ajax_nopriv_kb_update_category', [$this, 'ajax_update_category']);
         add_action('wp_ajax_kb_update_order', [$this, 'ajax_update_order']);
         add_action('wp_ajax_nopriv_kb_update_order', [$this, 'ajax_update_order']);
         add_action('wp_ajax_kb_check_subject', [$this, 'ajax_check_subject']);
@@ -51,11 +53,12 @@ class KB_KnowledgeBase_Editor {
         add_shortcode('kb_archive_bin', [$this, 'archive_bin_shortcode']);
 
         add_action('init', [$this, 'disable_cache_for_kb'], 1);
-        
+
         register_activation_hook(__FILE__, [$this, 'create_table']);
         add_shortcode('kb_public_form', [$this, 'public_form_shortcode']);
         // bulk grid editor shortcode (renamed to avoid conflicts)
         add_shortcode('kb_public_grid', [$this, 'bulk_public_grid_shortcode']);
+        add_shortcode('kb_manage_categories', [$this, 'manage_categories_shortcode']);
         add_shortcode('kb_maagar_setings', [$this, 'settings_shortcode']);
         add_shortcode('kb_home_page', [$this, 'home_page_shortcode']);
         $this->create_table();
@@ -212,6 +215,38 @@ class KB_KnowledgeBase_Editor {
         wp_send_json_success();
     }
 
+    public function ajax_update_category() {
+        check_ajax_referer('kbnonce', 'nonce');
+        global $wpdb;
+
+        $id = isset($_POST['cat_id']) ? intval($_POST['cat_id']) : 0;
+        $name = isset($_POST['cat_name']) ? sanitize_text_field(wp_unslash($_POST['cat_name'])) : '';
+        $parent = isset($_POST['parent_id']) ? intval($_POST['parent_id']) : 0;
+        $order = isset($_POST['sort_order']) ? intval($_POST['sort_order']) : 0;
+
+        if(!$id || $name === '') {
+            wp_send_json_error(['message' => 'נתוני קטגוריה חסרים']);
+        }
+
+        if($parent === $id) {
+            wp_send_json_error(['message' => 'לא ניתן להציב קטגוריה כהורה של עצמה']);
+        }
+
+        $wpdb->update(
+            $wpdb->prefix.'kb_categories',
+            [
+                'category_name' => $name,
+                'parent_id' => $parent,
+                'sort_order' => $order,
+            ],
+            ['id' => $id],
+            ['%s','%d','%d'],
+            ['%d']
+        );
+
+        wp_send_json_success();
+    }
+
     public function ajax_update_order() {
         check_ajax_referer('kbnonce', 'nonce');
         global $wpdb;
@@ -219,6 +254,134 @@ class KB_KnowledgeBase_Editor {
             $wpdb->update($wpdb->prefix.'kb_categories', ['sort_order'=>intval($order)], ['id'=>intval($id)]);
         }
         wp_send_json_success();
+    }
+
+    public function manage_categories_shortcode() {
+        global $wpdb;
+        $cats_table = $wpdb->prefix . 'kb_categories';
+        $cats = $wpdb->get_results("SELECT * FROM {$cats_table} ORDER BY parent_id, sort_order, category_name");
+
+        $options = '<option value="0">ראשי</option>';
+        foreach($cats as $c) {
+            $options .= '<option value="'.intval($c->id).'">'.esc_html($c->category_name).'</option>';
+        }
+
+        ob_start();
+        ?>
+        <div class="kb-container">
+            <?php echo $this->render_navigation_bar('categories'); ?>
+            <div class="kb-cat-manager">
+                <div class="kb-cat-manager__header">
+                    <div>
+                        <h2>ניהול קטגוריות</h2>
+                        <p class="kb-text-muted">הוספה, שינוי מיקום, עריכה או מחיקה של קטגוריות ותתי קטגוריות במאגר.</p>
+                    </div>
+                    <div class="kb-cat-add">
+                        <input type="text" id="kb-cat-new-name" class="kb-input" placeholder="שם קטגוריה חדשה">
+                        <select id="kb-cat-new-parent" class="kb-input"><?php echo $options; ?></select>
+                        <button type="button" id="kb-cat-add-btn" class="kb-btn kb-btn-primary">➕ הוסף</button>
+                    </div>
+                </div>
+
+                <div class="kb-cat-table-wrap">
+                    <table class="kb-table kb-cat-table">
+                        <thead>
+                            <tr>
+                                <th>שם</th>
+                                <th>הורה</th>
+                                <th>מיקום</th>
+                                <th>פעולות</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                        <?php foreach($cats as $cat): ?>
+                            <tr data-cat-id="<?php echo intval($cat->id); ?>">
+                                <td><input type="text" class="kb-input kb-cat-name" value="<?php echo esc_attr($cat->category_name); ?>" aria-label="שם קטגוריה"></td>
+                                <td>
+                                    <select class="kb-input kb-cat-parent" aria-label="קטגוריית אם">
+                                        <?php echo $options; ?>
+                                    </select>
+                                </td>
+                                <td><input type="number" class="kb-input kb-cat-order" value="<?php echo intval($cat->sort_order); ?>" aria-label="סדר"></td>
+                                <td class="kb-cat-actions">
+                                    <button type="button" class="kb-btn kb-btn-secondary kb-cat-save">💾 שמור</button>
+                                    <button type="button" class="kb-btn kb-btn-danger kb-cat-delete">🗑️ מחק</button>
+                                </td>
+                            </tr>
+                        <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <script>
+        document.addEventListener('DOMContentLoaded', function(){
+            const parentOptions = `<?php echo str_replace(['`', "\n"], ['\\`',''], $options); ?>`;
+            document.querySelectorAll('.kb-cat-parent').forEach(function(sel){
+                const row = sel.closest('tr');
+                const currentParent = <?php echo wp_json_encode(array_column($cats, 'parent_id', 'id')); ?>[row.dataset.catId] || 0;
+                sel.value = currentParent;
+            });
+
+            function reloadPage(){ location.reload(); }
+
+            document.getElementById('kb-cat-add-btn').addEventListener('click', function(){
+                const name = document.getElementById('kb-cat-new-name').value.trim();
+                const parent = document.getElementById('kb-cat-new-parent').value;
+                if(!name){ alert('יש להזין שם'); return; }
+                const fd = new FormData();
+                fd.append('action','kb_add_category');
+                fd.append('nonce', kbAjax.nonce);
+                fd.append('cat_name', name);
+                fd.append('parent_id', parent);
+                fetch(kbAjax.ajaxurl, { method:'POST', body: fd })
+                    .then(res=>res.json())
+                    .then(json=>{ if(json.success){ reloadPage(); } else { alert('שגיאה בהוספה'); } });
+            });
+
+            document.querySelectorAll('.kb-cat-save').forEach(function(btn){
+                btn.addEventListener('click', function(){
+                    const row = this.closest('tr');
+                    const id = row.dataset.catId;
+                    const name = row.querySelector('.kb-cat-name').value.trim();
+                    const parent = row.querySelector('.kb-cat-parent').value;
+                    const order = row.querySelector('.kb-cat-order').value || 0;
+                    if(!name){ alert('יש להזין שם'); return; }
+                    const fd = new FormData();
+                    fd.append('action','kb_update_category');
+                    fd.append('nonce', kbAjax.nonce);
+                    fd.append('cat_id', id);
+                    fd.append('cat_name', name);
+                    fd.append('parent_id', parent);
+                    fd.append('sort_order', order);
+                    fetch(kbAjax.ajaxurl, { method:'POST', body: fd })
+                        .then(res=>res.json())
+                        .then(json=>{
+                            if(json.success){ reloadPage(); }
+                            else { alert(json.data && json.data.message ? json.data.message : 'שמירה נכשלה'); }
+                        });
+                });
+            });
+
+            document.querySelectorAll('.kb-cat-delete').forEach(function(btn){
+                btn.addEventListener('click', function(){
+                    if(!confirm('למחוק קטגוריה זו?')) return;
+                    const row = this.closest('tr');
+                    const id = row.dataset.catId;
+                    const fd = new FormData();
+                    fd.append('action','kb_delete_category');
+                    fd.append('nonce', kbAjax.nonce);
+                    fd.append('cat_id', id);
+                    fetch(kbAjax.ajaxurl, { method:'POST', body: fd })
+                        .then(res=>res.json())
+                        .then(json=>{ if(json.success){ reloadPage(); } else { alert('מחיקה נכשלה'); } });
+                });
+            });
+        });
+        </script>
+        <?php
+        return ob_get_clean();
     }
 
     public function categories_page() {
@@ -1042,6 +1205,54 @@ XML;
             wp_safe_redirect($redirect_url);
             exit;
         }
+
+        wp_send_json_error(['message' => 'Upload failed']);
+    }
+
+    public function import_word_handler() {
+        check_ajax_referer('kbnonce', 'nonce');
+
+        if(!$this->user_can_edit_article()) {
+            wp_send_json_error(['message' => 'אין הרשאות לייבוא']);
+        }
+
+        if(!isset($_FILES['word_file'])) {
+            wp_send_json_error(['message' => 'לא הועלה קובץ']);
+        }
+
+        $uploaded = wp_handle_upload($_FILES['word_file'], [
+            'test_form' => false,
+            'mimes' => [ 'docx' => 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ],
+        ]);
+
+        if(isset($uploaded['error'])) {
+            wp_send_json_error(['message' => $uploaded['error']]);
+        }
+
+        $result = $this->import_articles_from_docx($uploaded['file']);
+        if(isset($uploaded['file']) && file_exists($uploaded['file'])) {
+            @unlink($uploaded['file']);
+        }
+
+        wp_send_json_success($result);
+    }
+
+    public function download_word_template() {
+        if(headers_sent()) {
+            exit;
+        }
+
+        $file = $this->generate_word_template_docx();
+        if(!$file || !file_exists($file)) {
+            wp_die('יצירת התבנית נכשלה');
+        }
+
+        header('Content-Type: application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+        header('Content-Disposition: attachment; filename="kb-import-template.docx"');
+        header('Content-Length: '.filesize($file));
+        readfile($file);
+        @unlink($file);
+        exit;
     }
 
     public function main_page() {
@@ -1111,39 +1322,30 @@ XML;
         }
         echo '</tbody></table></div>';
     }
-	public function shortcode_tree($atts) {
-		global $wpdb;
-        $cats = $wpdb->get_results("SELECT * FROM {$wpdb->prefix}kb_categories ORDER BY parent_id, sort_order, category_name");
-        $table = $wpdb->prefix . 'kb_articles';
-        $home_url = home_url('/');
-        ob_start();
-        echo "<div class=\"kb-container\"><div style='text-align:right;direction:rtl;max-width:770px;margin:auto;padding:30px 0;'>";
-        echo $this->render_navigation_bar('categories');
-        echo '<h2 style="margin:28px 0 16px 0;border-bottom:1.5px solid #eee;">עץ קטגוריות ומאמרים</h2><ul style="list-style-type:none;padding-right:0;">';
-        $this->print_tree($cats, 0, $table, $home_url);
-        echo "</ul></div></div>";
-        return ob_get_clean();
+    public function shortcode_tree($atts) {
+        return $this->manage_categories_shortcode();
     }
-public function print_tree($cats, $parent, $table, $home_url) {
-    global $wpdb;
-    foreach ($cats as $c) {
-        if($c->parent_id == $parent) {
-            echo "<li style='margin:12px 0;'><span style='font-weight:bold;color:#34495e;font-size:1.13em'>" . esc_html($c->category_name) . "</span>";
-            $articles = $wpdb->get_results($wpdb->prepare("SELECT id, subject FROM $table WHERE (is_deleted IS NULL OR is_deleted=0) AND (is_archived IS NULL OR is_archived=0) AND category LIKE %s ORDER BY subject", '%'.$wpdb->esc_like($c->category_name).'%'));
-            if($articles) {
-                echo "<ul style='margin-top:2px;'>";
-                foreach($articles as $a){
-                    $link = add_query_arg(['kb_article' => $a->id], $home_url);
-                    echo "<li style='margin:4px 0 4px 0;font-weight:normal;'><a style='color:#1f6697;font-size:1em;text-decoration:underline;' href='".esc_url($link)."'>" . esc_html($a->subject) . "</a></li>";
+
+    public function print_tree($cats, $parent, $table, $home_url) {
+        global $wpdb;
+        foreach ($cats as $c) {
+            if($c->parent_id == $parent) {
+                echo "<li style='margin:12px 0;'><span style='font-weight:bold;color:#34495e;font-size:1.13em'>" . esc_html($c->category_name) . "</span>";
+                $articles = $wpdb->get_results($wpdb->prepare("SELECT id, subject FROM $table WHERE (is_deleted IS NULL OR is_deleted=0) AND (is_archived IS NULL OR is_archived=0) AND category LIKE %s ORDER BY subject", '%'.$wpdb->esc_like($c->category_name).'%'));
+                if($articles) {
+                    echo "<ul style='margin-top:2px;'>";
+                    foreach($articles as $a){
+                        $link = add_query_arg(['kb_article' => $a->id], $home_url);
+                        echo "<li style='margin:4px 0 4px 0;font-weight:normal;'><a style='color:#1f6697;font-size:1em;text-decoration:underline;' href='".esc_url($link)."'>" . esc_html($a->subject) . "</a></li>";
+                    }
+                    echo "</ul>";
                 }
-                echo "</ul>";
+                echo "<ul style='margin-top:6px;'>";
+                $this->print_tree($cats, $c->id, $table, $home_url);
+                echo "</ul></li>";
             }
-            echo "<ul style='margin-top:6px;'>";
-            $this->print_tree($cats, $c->id, $table, $home_url);
-            echo "</ul></li>";
         }
     }
-}
 
     public function edit_page() {
         global $wpdb;
@@ -1561,12 +1763,14 @@ public function print_tree($cats, $parent, $table, $home_url) {
         }
 
         $created = 0;
+        $updated = 0;
         $errors = [];
         $status_labels = $this->get_status_labels();
         $row_num = 0;
 
         foreach($articles as $item) {
             $row_num++;
+            $article_id = isset($item['article_id']) ? intval($item['article_id']) : 0;
             $subject = isset($item['subject']) ? sanitize_text_field($item['subject']) : '';
             $tech_solution = isset($item['technical_solution']) ? wp_kses_post($item['technical_solution']) : '';
             if(!$subject) {
@@ -1587,7 +1791,7 @@ public function print_tree($cats, $parent, $table, $home_url) {
             }
 
             $existing = $wpdb->get_var($wpdb->prepare("SELECT id FROM {$wpdb->prefix}kb_articles WHERE subject = %s", $subject));
-            if($existing) {
+            if($existing && (!$article_id || intval($existing) !== $article_id)) {
                 $errors[] = "שורה {$row_num}: נושא קיים כבר";
                 continue;
             }
@@ -1624,11 +1828,16 @@ public function print_tree($cats, $parent, $table, $home_url) {
                 }
             }
 
-            $wpdb->insert($wpdb->prefix.'kb_articles', $data);
-            $created++;
+            if($article_id) {
+                $wpdb->update($wpdb->prefix.'kb_articles', $data, ['id'=>$article_id]);
+                $updated++;
+            } else {
+                $wpdb->insert($wpdb->prefix.'kb_articles', $data);
+                $created++;
+            }
         }
 
-        wp_send_json_success(['created' => $created, 'errors' => $errors]);
+        wp_send_json_success(['created' => $created, 'updated' => $updated, 'errors' => $errors]);
     }
 
     public function upload_image() {
@@ -2033,6 +2242,41 @@ public function print_tree($cats, $parent, $table, $home_url) {
         list($main_cats, $sub_cats_map, $cats_by_name) = $this->get_category_hierarchy();
         $status_labels = $this->get_status_labels();
         $bulk_nonce = wp_create_nonce('kb_bulk_save');
+        global $wpdb;
+        $table = $wpdb->prefix . 'kb_articles';
+        $articles = $wpdb->get_results("SELECT * FROM $table WHERE (is_deleted IS NULL OR is_deleted=0) ORDER BY created_at DESC");
+        foreach($articles as $a){ $this->merge_short_desc_into_technical($a); }
+        $grid_rows = [];
+        foreach($articles as $a) {
+            list($main_cat, $sub_cat) = $this->split_category_parts($a->category);
+            $main_id = isset($cats_by_name[$main_cat]) ? intval($cats_by_name[$main_cat]->id) : 0;
+            $sub_id = 0;
+            if($main_id && isset($sub_cats_map[$main_id])) {
+                foreach($sub_cats_map[$main_id] as $sc) {
+                    if($sc->category_name === $sub_cat) { $sub_id = intval($sc->id); break; }
+                }
+            }
+
+            $grid_rows[] = [
+                'id' => intval($a->id),
+                'subject' => $a->subject,
+                'main_category_id' => $main_id,
+                'sub_category_id' => $sub_id,
+                'user_rating' => $this->get_article_rating($a),
+                'vulnerability_level' => $this->sanitize_vulnerability_level($a->vulnerability_level ?? null),
+                'review_status' => intval($a->review_status),
+                'technical_desc' => $a->technical_desc,
+                'technical_solution' => $a->technical_solution,
+                'solution_script' => $a->solution_script,
+                'post_check' => $a->post_check,
+                'check_script' => $a->check_script,
+                'links' => $a->links,
+                'main_label' => $main_cat,
+                'sub_label' => $sub_cat,
+                'status_label' => isset($status_labels[$a->review_status]) ? $status_labels[$a->review_status] : '',
+                'vulnerability_label' => $this->get_vulnerability_label($a),
+            ];
+        }
 
         ob_start();
         ?>
@@ -2053,12 +2297,48 @@ public function print_tree($cats, $parent, $table, $home_url) {
                 <table class="kb-bulk-grid">
                     <thead>
                         <tr>
-                            <th>נושא*</th>
-                            <th>קטגוריה</th>
-                            <th>תת קטגוריה</th>
-                            <th>דירוג (1-100)</th>
-                            <th>פגיעות</th>
-                            <th>סטטוס</th>
+                            <th class="kb-sortable" data-sort-key="subject">
+                                <div class="kb-th-inner">
+                                    <span>נושא*</span>
+                                    <button type="button" class="kb-filter-toggle" data-filter-key="subjectLabel" aria-label="סינון נושא"><span class="kb-filter-caret">▼</span></button>
+                                </div>
+                                <div class="kb-filter-menu" data-filter-menu="subjectLabel"></div>
+                            </th>
+                            <th class="kb-sortable" data-sort-key="maincat">
+                                <div class="kb-th-inner">
+                                    <span>קטגוריה</span>
+                                    <button type="button" class="kb-filter-toggle" data-filter-key="maincatLabel" aria-label="סינון קטגוריה"><span class="kb-filter-caret">▼</span></button>
+                                </div>
+                                <div class="kb-filter-menu" data-filter-menu="maincatLabel"></div>
+                            </th>
+                            <th class="kb-sortable" data-sort-key="subcat">
+                                <div class="kb-th-inner">
+                                    <span>תת קטגוריה</span>
+                                    <button type="button" class="kb-filter-toggle" data-filter-key="subcatLabel" aria-label="סינון תת קטגוריה"><span class="kb-filter-caret">▼</span></button>
+                                </div>
+                                <div class="kb-filter-menu" data-filter-menu="subcatLabel"></div>
+                            </th>
+                            <th class="kb-sortable" data-sort-key="rating">
+                                <div class="kb-th-inner">
+                                    <span>דירוג (1-100)</span>
+                                    <button type="button" class="kb-filter-toggle" data-filter-key="rating" aria-label="סינון דירוג"><span class="kb-filter-caret">▼</span></button>
+                                </div>
+                                <div class="kb-filter-menu" data-filter-menu="rating"></div>
+                            </th>
+                            <th class="kb-sortable" data-sort-key="vulnerability">
+                                <div class="kb-th-inner">
+                                    <span>פגיעות</span>
+                                    <button type="button" class="kb-filter-toggle" data-filter-key="vulnerabilityLabel" aria-label="סינון פגיעות"><span class="kb-filter-caret">▼</span></button>
+                                </div>
+                                <div class="kb-filter-menu" data-filter-menu="vulnerabilityLabel"></div>
+                            </th>
+                            <th class="kb-sortable" data-sort-key="status">
+                                <div class="kb-th-inner">
+                                    <span>סטטוס</span>
+                                    <button type="button" class="kb-filter-toggle" data-filter-key="statusLabel" aria-label="סינון סטטוס"><span class="kb-filter-caret">▼</span></button>
+                                </div>
+                                <div class="kb-filter-menu" data-filter-menu="statusLabel"></div>
+                            </th>
                             <th>תיאור טכני</th>
                             <th>פתרון טכני*</th>
                             <th>סקריפט פתרון</th>
@@ -2080,8 +2360,19 @@ public function print_tree($cats, $parent, $table, $home_url) {
                 subs: <?php echo wp_json_encode($sub_cats_map); ?>
             };
             const statusLabels = <?php echo wp_json_encode($status_labels); ?>;
+            const existingArticles = <?php echo wp_json_encode($grid_rows); ?>;
             const bodyEl = document.getElementById('kb-bulk-body');
             let rowIdx = 0;
+            let sortState = { field: 'subject', dir: 'asc' };
+            const filterState = {};
+            const escapeAttr = (val) => {
+                if(val === null || val === undefined) return '';
+                return String(val).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');
+            };
+            const escContent = (val) => {
+                if(val === null || val === undefined) return '';
+                return String(val).replace(/`/g,'\\`');
+            };
 
             if(!window.kbUploadAdapterDefined){
                 class MyUploadAdapter {
@@ -2127,17 +2418,50 @@ public function print_tree($cats, $parent, $table, $home_url) {
                 scope.querySelectorAll('.kb-grid-ckeditor').forEach(el => {
                     if(el.classList.contains('ck-initialized')) return;
                     ClassicEditor.create(el, { extraPlugins: [MyCustomUploadAdapterPlugin] })
-                        .then(ed => { el.classList.add('ck-initialized'); el.editorInstance = ed; })
+                        .then(ed => {
+                            el.classList.add('ck-initialized');
+                            el.editorInstance = ed;
+                            if(el.value){ ed.setData(el.value); }
+                            ed.model.document.on('change:data', ()=> updateRowDataset(el.closest('tr')));
+                        })
                         .catch(err => console.error(err));
                 });
             }
 
-            function createRow(){
+            function updateRowDataset(tr){
+                if(!tr) return;
+                const subject = tr.querySelector('[name="subject"]').value.trim();
+                const mainSel = tr.querySelector('[name="main_category_id"]');
+                const subSel = tr.querySelector('[name="sub_category_id"]');
+                const statusSel = tr.querySelector('[name="review_status"]');
+                const rating = tr.querySelector('[name="user_rating"]').value.trim();
+                const vulnSel = tr.querySelector('[name="vulnerability_level"]');
+
+                tr.dataset.subject = subject.toLowerCase();
+                tr.dataset.subjectLabel = subject;
+                tr.dataset.maincat = mainSel && mainSel.value ? mainSel.options[mainSel.selectedIndex].text.toLowerCase() : '';
+                tr.dataset.maincatLabel = mainSel && mainSel.value ? mainSel.options[mainSel.selectedIndex].text : '';
+                tr.dataset.subcat = subSel && subSel.value ? subSel.options[subSel.selectedIndex].text.toLowerCase() : '';
+                tr.dataset.subcatLabel = subSel && subSel.value ? subSel.options[subSel.selectedIndex].text : '';
+                tr.dataset.status = statusSel ? statusSel.value : '';
+                tr.dataset.statusLabel = statusSel && statusSel.value !== '' ? statusLabels[statusSel.value] || '' : '';
+                tr.dataset.rating = rating;
+                tr.dataset.vulnerability = vulnSel && vulnSel.value ? vulnSel.value : '';
+                tr.dataset.vulnerabilityLabel = vulnSel && vulnSel.value ? vulnSel.options[vulnSel.selectedIndex].text : '';
+            }
+
+            function createRow(data = {}){
                 rowIdx++;
                 const tr = document.createElement('tr');
                 tr.dataset.row = rowIdx;
+                const ratingVal = (data.user_rating !== null && data.user_rating !== undefined) ? data.user_rating : '';
+                const vulnMap = {1:'low',2:'medium',3:'high','low':'low','medium':'medium','high':'high'};
+                const vulnVal = vulnMap[data.vulnerability_level] || '';
                 tr.innerHTML = `
-                    <td><input type="text" name="subject" class="kb-input" placeholder="נושא" required></td>
+                    <td>
+                        <input type="hidden" name="article_id" value="${data.id || ''}">
+                        <input type="text" name="subject" class="kb-input" placeholder="נושא" value="${escapeAttr(data.subject || '')}" required>
+                    </td>
                     <td>
                         <select name="main_category_id" class="kb-input">
                             <option value="">בחר קטגוריה</option>
@@ -2147,7 +2471,7 @@ public function print_tree($cats, $parent, $table, $home_url) {
                     <td>
                         <select name="sub_category_id" class="kb-input"><option value="">בחר תת קטגוריה</option></select>
                     </td>
-                    <td><input type="number" name="user_rating" class="kb-input" min="1" max="100" placeholder="1-100"></td>
+                    <td><input type="number" name="user_rating" class="kb-input" min="1" max="100" placeholder="1-100" value="${ratingVal === null ? '' : ratingVal}"></td>
                     <td>
                         <select name="vulnerability_level" class="kb-input">
                             <option value="">בחר</option>
@@ -2158,31 +2482,162 @@ public function print_tree($cats, $parent, $table, $home_url) {
                     </td>
                     <td>
                         <select name="review_status" class="kb-input">
-                            ${Object.keys(statusLabels).map(key=>`<option value="${key}">${statusLabels[key]}</option>`).join('')}
+                            ${Object.keys(statusLabels).map(key=>`<option value="${key}" ${data.review_status == key ? 'selected' : ''}>${statusLabels[key]}</option>`).join('')}
                         </select>
                     </td>
-                    <td><textarea name="technical_desc" class="kb-grid-ckeditor"></textarea></td>
-                    <td><textarea name="technical_solution" class="kb-grid-ckeditor" required></textarea></td>
-                    <td><textarea name="solution_script" class="kb-input kb-grid-code" dir="ltr"></textarea></td>
-                    <td><textarea name="post_check" class="kb-grid-ckeditor"></textarea></td>
-                    <td><textarea name="check_script" class="kb-input kb-grid-code" dir="ltr"></textarea></td>
-                    <td><textarea name="links" class="kb-input"></textarea></td>
+                    <td><textarea name="technical_desc" class="kb-grid-ckeditor">${escContent(data.technical_desc || '')}</textarea></td>
+                    <td><textarea name="technical_solution" class="kb-grid-ckeditor" required>${escContent(data.technical_solution || '')}</textarea></td>
+                    <td><textarea name="solution_script" class="kb-input kb-grid-code" dir="ltr">${escContent(data.solution_script || '')}</textarea></td>
+                    <td><textarea name="post_check" class="kb-grid-ckeditor">${escContent(data.post_check || '')}</textarea></td>
+                    <td><textarea name="check_script" class="kb-input kb-grid-code" dir="ltr">${escContent(data.check_script || '')}</textarea></td>
+                    <td><textarea name="links" class="kb-input">${escContent(data.links || '')}</textarea></td>
                 `;
                 bodyEl.appendChild(tr);
 
                 const mainSel = tr.querySelector('select[name="main_category_id"]');
                 const subSel = tr.querySelector('select[name="sub_category_id"]');
-                mainSel.addEventListener('change', ()=>populateSubs(subSel, mainSel.value));
+                if(data.main_category_id){ mainSel.value = data.main_category_id; populateSubs(subSel, data.main_category_id); }
+                if(data.sub_category_id){ subSel.value = data.sub_category_id; }
+                const vulnSel = tr.querySelector('select[name="vulnerability_level"]');
+                vulnSel.value = vulnVal;
+
+                mainSel.addEventListener('change', ()=>{ populateSubs(subSel, mainSel.value); updateRowDataset(tr); });
+                subSel.addEventListener('change', ()=> updateRowDataset(tr));
+                tr.querySelector('[name="subject"]').addEventListener('input', ()=> updateRowDataset(tr));
+                tr.querySelectorAll('input[name="user_rating"], select[name="review_status"], select[name="vulnerability_level"]').forEach(el=>{
+                    el.addEventListener('change', ()=> updateRowDataset(tr));
+                });
+
                 initEditors(tr);
+                updateRowDataset(tr);
             }
 
-            document.getElementById('kb-bulk-add-row').addEventListener('click', createRow);
-            createRow();
+            function getRows(){ return Array.from(bodyEl.querySelectorAll('tr')); }
+
+            function matchesFilters(row){
+                return Object.keys(filterState).every(function(key){
+                    if(!filterState[key] || filterState[key].size === 0) return true;
+                    const val = row.dataset[key] || '';
+                    return filterState[key].has(val);
+                });
+            }
+
+            function applyFilters(){
+                getRows().forEach(row => {
+                    row.style.display = matchesFilters(row) ? '' : 'none';
+                });
+            }
+
+            function getSortValue(row, field){
+                const val = row.dataset[field] || '';
+                if(field === 'rating'){ return val === '' ? -Infinity : parseInt(val,10); }
+                return val;
+            }
+
+            function applySort(){
+                const rows = getRows();
+                const dir = sortState.dir === 'desc' ? -1 : 1;
+                rows.sort((a,b)=>{
+                    const av = getSortValue(a, sortState.field);
+                    const bv = getSortValue(b, sortState.field);
+                    if(av === bv) return 0;
+                    return av > bv ? dir : -dir;
+                });
+                rows.forEach(r => bodyEl.appendChild(r));
+                document.querySelectorAll('.kb-sortable').forEach(th => {
+                    th.dataset.sortDir = th.dataset.sortKey === sortState.field ? sortState.dir : '';
+                });
+            }
+
+            function renderMenuOptions(menu, key){
+                menu.innerHTML = '';
+                const values = [];
+                getRows().forEach(row => {
+                    const val = row.dataset[key] || '';
+                    if(val && !values.includes(val)) values.push(val);
+                });
+                values.sort((a,b)=> a.localeCompare(b, 'he'));
+                values.forEach(val => {
+                    const option = document.createElement('label');
+                    option.className = 'kb-filter-option';
+                    const input = document.createElement('input');
+                    input.type = 'checkbox';
+                    input.value = val;
+                    if(!filterState[key]) filterState[key] = new Set();
+                    input.checked = filterState[key].has(val);
+                    input.addEventListener('change', function(){
+                        if(this.checked) filterState[key].add(val); else filterState[key].delete(val);
+                        applyFilters();
+                    });
+                    const text = document.createElement('span');
+                    text.textContent = val;
+                    option.appendChild(input);
+                    option.appendChild(text);
+                    menu.appendChild(option);
+                });
+
+                const actions = document.createElement('div');
+                actions.className = 'kb-filter-actions';
+                const clearBtn = document.createElement('button');
+                clearBtn.type = 'button';
+                clearBtn.textContent = 'נקה';
+                clearBtn.addEventListener('click', function(){
+                    filterState[key] = new Set();
+                    renderMenuOptions(menu, key);
+                    applyFilters();
+                });
+                actions.appendChild(clearBtn);
+                menu.appendChild(actions);
+            }
+
+            let activeMenu = null;
+            function closeMenus(except){
+                document.querySelectorAll('.kb-filter-menu').forEach(menu=>{
+                    if(except && menu.dataset.filterMenu === except) return;
+                    menu.classList.remove('is-open');
+                });
+                activeMenu = except || null;
+            }
+
+            document.querySelectorAll('.kb-filter-toggle').forEach(btn => {
+                btn.addEventListener('click', function(e){
+                    e.stopPropagation();
+                    const key = this.dataset.filterKey;
+                    const menu = document.querySelector('.kb-filter-menu[data-filter-menu="'+key+'"]');
+                    if(!menu) return;
+                    if(activeMenu === key){ closeMenus(); return; }
+                    closeMenus(key);
+                    renderMenuOptions(menu, key);
+                    menu.classList.add('is-open');
+                });
+            });
+
+            document.addEventListener('click', function(e){
+                if(e.target.closest('.kb-filter-menu') || e.target.closest('.kb-filter-toggle')) return;
+                closeMenus();
+            });
+
+            document.querySelectorAll('.kb-sortable').forEach(th => {
+                th.addEventListener('click', function(e){
+                    if(e.target.closest('.kb-filter-toggle')) return;
+                    const key = this.dataset.sortKey;
+                    if(sortState.field === key){ sortState.dir = sortState.dir === 'asc' ? 'desc' : 'asc'; }
+                    else { sortState.field = key; sortState.dir = 'asc'; }
+                    applySort();
+                });
+            });
+
+            existingArticles.forEach(data => createRow(data));
+            if(!existingArticles.length){ createRow(); }
+
+            applyFilters();
+            applySort();
+
+            document.getElementById('kb-bulk-add-row').addEventListener('click', ()=> createRow());
 
             document.getElementById('kb-bulk-save').addEventListener('click', function(){
-                const rows = Array.from(bodyEl.querySelectorAll('tr'));
-                const payload = [];
-                rows.forEach(tr => {
+                const rows = getRows();
+                const payload = rows.map(tr => {
                     const item = {};
                     tr.querySelectorAll('input, select, textarea').forEach(el => {
                         if(el.classList.contains('kb-grid-ckeditor')) {
@@ -2191,7 +2646,7 @@ public function print_tree($cats, $parent, $table, $home_url) {
                             item[el.name] = el.value;
                         }
                     });
-                    payload.push(item);
+                    return item;
                 });
 
                 const fd = new FormData();
@@ -2204,8 +2659,9 @@ public function print_tree($cats, $parent, $table, $home_url) {
                     .then(json => {
                         if(json.success) {
                             const created = json.data.created || 0;
+                            const updated = json.data.updated || 0;
                             const errs = json.data.errors || [];
-                            let msg = `✓ נשמרו ${created} מאמרים.`;
+                            let msg = `✓ נשמרו ${created} חדשים, עודכנו ${updated}.`;
                             if(errs.length) { msg += '<br>' + errs.join('<br>'); }
                             document.getElementById('kb-bulk-message').innerHTML = msg;
                             document.getElementById('kb-bulk-message').classList.add('kb-bulk-message--success');
