@@ -1205,6 +1205,54 @@ XML;
             wp_safe_redirect($redirect_url);
             exit;
         }
+
+        wp_send_json_error(['message' => 'Upload failed']);
+    }
+
+    public function import_word_handler() {
+        check_ajax_referer('kbnonce', 'nonce');
+
+        if(!$this->user_can_edit_article()) {
+            wp_send_json_error(['message' => 'אין הרשאות לייבוא']);
+        }
+
+        if(!isset($_FILES['word_file'])) {
+            wp_send_json_error(['message' => 'לא הועלה קובץ']);
+        }
+
+        $uploaded = wp_handle_upload($_FILES['word_file'], [
+            'test_form' => false,
+            'mimes' => [ 'docx' => 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ],
+        ]);
+
+        if(isset($uploaded['error'])) {
+            wp_send_json_error(['message' => $uploaded['error']]);
+        }
+
+        $result = $this->import_articles_from_docx($uploaded['file']);
+        if(isset($uploaded['file']) && file_exists($uploaded['file'])) {
+            @unlink($uploaded['file']);
+        }
+
+        wp_send_json_success($result);
+    }
+
+    public function download_word_template() {
+        if(headers_sent()) {
+            exit;
+        }
+
+        $file = $this->generate_word_template_docx();
+        if(!$file || !file_exists($file)) {
+            wp_die('יצירת התבנית נכשלה');
+        }
+
+        header('Content-Type: application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+        header('Content-Disposition: attachment; filename="kb-import-template.docx"');
+        header('Content-Length: '.filesize($file));
+        readfile($file);
+        @unlink($file);
+        exit;
     }
 
     public function main_page() {
