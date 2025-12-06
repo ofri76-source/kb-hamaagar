@@ -197,6 +197,33 @@
   align-items: center;
 }
 
+/* WordPress button fallbacks inside the KB container */
+.kb-container .button,
+.kb-container .button-primary,
+.kb-container button,
+.kb-container input[type="submit"],
+.kb-container input[type="button"],
+.kb-container input[type="reset"] {
+  background: linear-gradient(135deg, #dbeafe, #bfdbfe);
+  color: #0b1220;
+  border: 1px solid #0f172a;
+  border-radius: 12px;
+  box-shadow: 0 10px 20px rgba(15, 23, 42, 0.16);
+  font-weight: 700;
+  padding: 0.55rem 1.2rem;
+}
+
+.kb-container .button:hover,
+.kb-container .button-primary:hover,
+.kb-container button:hover,
+.kb-container input[type="submit"]:hover,
+.kb-container input[type="button"]:hover,
+.kb-container input[type="reset"]:hover {
+  background: linear-gradient(135deg, #bfdbfe, #93c5fd);
+  color: #0b1220;
+  transform: translateY(-1px);
+}
+
 /* Forms */
 .kb-form input[type="text"],
 .kb-form input[type="number"],

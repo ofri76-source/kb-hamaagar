@@ -183,6 +183,7 @@ class KB_KnowledgeBase_Editor {
     }
 
     public function enqueue_scripts($hook) {
+        wp_enqueue_script('jquery');
         wp_enqueue_style('kb-style', plugins_url('css/style.css', __FILE__), [], time());
         wp_enqueue_script('ckeditor5', 'https://cdn.ckeditor.com/ckeditor5/40.1.0/classic/ckeditor.js', [], '40.1.0');
         wp_localize_script('ckeditor5', 'kbAjax', [
@@ -2143,6 +2144,7 @@ XML;
                 let techSolution = document.querySelector("#pub_technical_solution").editorInstance ?
                     document.querySelector("#pub_technical_solution").editorInstance.getData().trim() : "";
                 let mainCat = document.querySelector('[name="main_category_id"]') ? document.querySelector('[name="main_category_id"]').value : '';
+                let subCat = document.querySelector('[name="sub_category_id"]') ? document.querySelector('[name="sub_category_id"]').value : '';
 
                 if(!subject) {
                     alert("❌ שדה נושא הוא שדה חובה!");
