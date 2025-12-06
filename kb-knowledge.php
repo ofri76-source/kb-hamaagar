@@ -1534,7 +1534,7 @@ XML;
                 }
 
                 if(!mainCat) {
-                    alert("❌ יש לבחור קטגוריה ראשית למאמר!");
+                    alert("❌ יש לבחור קטגוריה למאמר!");
                     return;
                 }
 
@@ -1645,7 +1645,7 @@ XML;
         $sub_cat_id = isset($_POST['sub_category_id']) ? intval($_POST['sub_category_id']) : 0;
         $data['category'] = $this->build_category_value($main_cat_id, $sub_cat_id);
         if(empty($data['category'])) {
-            wp_send_json_error(['message' => 'יש לבחור קטגוריה ראשית למאמר']);
+            wp_send_json_error(['message' => 'יש לבחור קטגוריה למאמר']);
         }
 
         $data['review_status'] = $status;
@@ -2140,7 +2140,7 @@ XML;
                 }
 
                 if(!mainCat) {
-                    alert("❌ יש לבחור קטגוריה ראשית למאמר!");
+                    alert("❌ יש לבחור קטגוריה למאמר!");
                     return;
                 }
 
@@ -2704,8 +2704,8 @@ XML;
                         </th>
                         <th class="kb-sortable" data-sort-key="maincat">
                             <div class="kb-th-inner">
-                                <span>קטגוריה ראשית</span>
-                                <button type="button" class="kb-filter-toggle" data-filter-key="maincatLabel" aria-label="סינון קטגוריה ראשית"><span class="kb-filter-caret">▼</span></button>
+                                <span>קטגוריה</span>
+                                <button type="button" class="kb-filter-toggle" data-filter-key="maincatLabel" aria-label="סינון קטגוריה"><span class="kb-filter-caret">▼</span></button>
                             </div>
                             <div class="kb-filter-menu" data-filter-menu="maincatLabel"></div>
                         </th>
@@ -3217,8 +3217,8 @@ XML;
                         </th>
                         <th class="kb-sortable" data-sort-key="maincat">
                             <div class="kb-th-inner">
-                                <span>קטגוריה ראשית</span>
-                                <button type="button" class="kb-filter-toggle" data-filter-key="maincatLabel" aria-label="סינון קטגוריה ראשית"><span class="kb-filter-caret">▼</span></button>
+                                <span>קטגוריה</span>
+                                <button type="button" class="kb-filter-toggle" data-filter-key="maincatLabel" aria-label="סינון קטגוריה"><span class="kb-filter-caret">▼</span></button>
                             </div>
                             <div class="kb-filter-menu" data-filter-menu="maincatLabel"></div>
                         </th>
@@ -3652,8 +3652,8 @@ XML;
                         </th>
                         <th class="kb-sortable" data-sort-key="maincat">
                             <div class="kb-th-inner">
-                                <span>קטגוריה ראשית</span>
-                                <button type="button" class="kb-filter-toggle" data-filter-key="maincatLabel" aria-label="סינון קטגוריה ראשית"><span class="kb-filter-caret">▼</span></button>
+                                <span>קטגוריה</span>
+                                <button type="button" class="kb-filter-toggle" data-filter-key="maincatLabel" aria-label="סינון קטגוריה"><span class="kb-filter-caret">▼</span></button>
                             </div>
                             <div class="kb-filter-menu" data-filter-menu="maincatLabel"></div>
                         </th>
