@@ -89,10 +89,10 @@
 
 /* Buttons */
 .kb-btn {
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.9), rgba(243, 244, 246, 0.92));
-  color: var(--kb-ink);
-  border: 1px solid rgba(148, 163, 184, 0.55);
-  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.08);
+  background: linear-gradient(135deg, #f8fafc, #eef2ff);
+  color: #0b1220;
+  border: 1px solid rgba(107, 114, 128, 0.4);
+  box-shadow: 0 6px 16px rgba(15, 23, 42, 0.08);
   font-weight: 700;
   border-radius: 14px;
   padding: 0.55rem 1.15rem;
@@ -108,26 +108,27 @@
 
 .kb-btn:hover,
 .kb-btn:focus {
-  background: linear-gradient(135deg, rgba(124, 58, 237, 0.12), rgba(34, 211, 238, 0.12));
-  box-shadow: 0 12px 26px rgba(15, 23, 42, 0.14);
+  background: linear-gradient(135deg, #e0e7ff, #dbeafe);
+  box-shadow: 0 12px 26px rgba(15, 23, 42, 0.16);
   transform: translateY(-1px);
+  color: #0b1220;
 }
 
 .kb-btn-primary {
-  background: linear-gradient(135deg, #7c3aed, #22d3ee);
-  color: #ffffff;
-  border: none;
-  box-shadow: 0 14px 30px rgba(124, 58, 237, 0.25);
+  background: linear-gradient(135deg, #c7d2fe, #a5b4fc);
+  color: #0b1220;
+  border: 1px solid #818cf8;
+  box-shadow: 0 14px 28px rgba(124, 58, 237, 0.18);
 }
 
 .kb-btn-secondary {
-  background: linear-gradient(135deg, rgba(15, 23, 42, 0.04), rgba(148, 163, 184, 0.2));
-  color: var(--kb-ink);
-  border: 1px solid rgba(15, 23, 42, 0.08);
+  background: linear-gradient(135deg, #f8fafc, #e2e8f0);
+  color: #0b1220;
+  border: 1px solid rgba(15, 23, 42, 0.1);
 }
 
 .kb-btn-danger {
-  background: linear-gradient(135deg, #fee2e2, #fecaca);
+  background: linear-gradient(135deg, #fee2e2, #fecdd3);
   color: #7f1d1d;
   border: 1px solid #fca5a5;
   box-shadow: 0 14px 24px rgba(239, 68, 68, 0.18);
@@ -135,7 +136,7 @@
 
 .kb-btn-warning {
   background: linear-gradient(135deg, #fff7ed, #ffedd5);
-  color: #92400e;
+  color: #7c2d12;
   border: 1px solid #fbbf24;
 }
 
@@ -147,9 +148,9 @@
 .kb-btn-close,
 .kb-btn-search,
 .kb-btn-success {
-  background: rgba(255, 255, 255, 0.8);
+  background: #ffffff;
   border: 1px solid rgba(148, 163, 184, 0.4);
-  color: var(--kb-ink);
+  color: #0b1220;
 }
 
 .kb-btn--blue,
@@ -159,7 +160,7 @@
 .kb-btn-warning,
 .kb-btn-secondary,
 .kb-btn-primary,
-.kb-btn-danger { color: inherit; }
+.kb-btn-danger { color: #0b1220; }
 
 .kb-inline-buttons,
 .kb-detail-row-buttons,
