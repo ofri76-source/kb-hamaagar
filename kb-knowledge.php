@@ -758,7 +758,6 @@ XML;
             '',
             'Links:',
             '',
-            'Short Description:',
             'Technical Description:',
             'Technical Solution:',
             'Post Check:',
@@ -835,6 +834,12 @@ XML;
                 }
             }
 
+            $prepared['technical_desc'] = $this->merge_short_desc_text(
+                isset($prepared['technical_desc']) ? $prepared['technical_desc'] : '',
+                isset($prepared['short_desc']) ? $prepared['short_desc'] : ''
+            );
+            unset($prepared['short_desc']);
+
             $rating = isset($article['user_rating']) ? intval($article['user_rating']) : null;
             if($rating < 1 || $rating > 100) { $rating = null; }
 
@@ -865,6 +870,21 @@ XML;
         return '';
     }
 
+    private function merge_short_desc_text($technical, $short) {
+        $technical = is_string($technical) ? trim($technical) : '';
+        $short = is_string($short) ? trim($short) : '';
+        if($short === '') return $technical;
+        if($technical === '') return $short;
+        return trim($technical . "\n\n" . $short);
+    }
+
+    private function merge_short_desc_into_technical($article) {
+        if(!$article || !isset($article->short_desc) || trim($article->short_desc) === '') return $article;
+        $article->technical_desc = $this->merge_short_desc_text(isset($article->technical_desc) ? $article->technical_desc : '', $article->short_desc);
+        $article->short_desc = '';
+        return $article;
+    }
+
     private function render_rating_badge($article) {
         $rating = $this->get_article_rating($article);
         if(is_null($rating)) return '';
@@ -893,11 +913,11 @@ XML;
     }
 
     private function render_article_body($article, $include_meta = true) {
+        $article = $this->merge_short_desc_into_technical($article);
         ob_start();
         ?>
         <div class="kb-article-body-block">
             <?php if($include_meta) echo $this->render_article_meta($article); ?>
-            <?php if($article->short_desc): ?><div class="kb-section"><h3>תיאור קצר</h3><?php echo $article->short_desc; ?></div><?php endif; ?>
             <?php if($article->technical_desc): ?><div class="kb-section"><h3>תיאור טכני</h3><?php echo $article->technical_desc; ?></div><?php endif; ?>
             <?php if($article->technical_solution): ?><div class="kb-section"><h3>פתרון טכני</h3><?php echo $article->technical_solution; ?></div><?php endif; ?>
             <?php if($article->solution_script): ?>
@@ -1051,8 +1071,8 @@ XML;
             $like = '%' . $wpdb->esc_like($search) . '%';
             $sql .= $wpdb->prepare(
                 " AND (category LIKE %s OR subject LIKE %s OR
-                short_desc LIKE %s OR technical_desc LIKE %s OR technical_solution LIKE %s)",
-                $like,$like,$like,$like,$like
+                technical_desc LIKE %s OR technical_solution LIKE %s)",
+                $like,$like,$like,$like
             );
         }
         $sql .= " ORDER BY created_at DESC";
@@ -1130,6 +1150,7 @@ public function print_tree($cats, $parent, $table, $home_url) {
         $table = $wpdb->prefix . 'kb_articles';
         $article = null;
         if (isset($_GET['edit'])) $article = $wpdb->get_row($wpdb->prepare("SELECT * FROM $table WHERE id=%d", intval($_GET['edit'])));
+        $article = $this->merge_short_desc_into_technical($article);
         list($main_cats, $sub_cats_map, $cats_by_name) = $this->get_category_hierarchy();
         $status_labels = $this->get_status_labels();
         $current_status = $article ? intval($article->review_status) : 0;
@@ -1188,8 +1209,6 @@ public function print_tree($cats, $parent, $table, $home_url) {
         echo '</fieldset>';
 
         echo '<fieldset class="kb-fieldset"><legend>פרטים</legend>';
-        echo '<div class="kb-row"><label class="kb-label">תיאור קצר:</label>
-            <textarea class="kb-ckeditor kb-input" name="short_desc" id="short_desc">'.($article ? $article->short_desc : '').'</textarea></div>';
         echo '<div class="kb-row"><label class="kb-label">תיאור טכני:</label>
             <textarea class="kb-ckeditor kb-input" name="technical_desc" id="technical_desc">'.($article ? $article->technical_desc : '').'</textarea></div>';
         echo '</fieldset>';
@@ -1439,12 +1458,27 @@ public function print_tree($cats, $parent, $table, $home_url) {
             }
         }
         
+        $data = [];
+        $data['subject'] = sanitize_text_field($_POST['subject']);
+
+        $technical_desc = isset($_POST['technical_desc']) ? wp_kses_post($_POST['technical_desc']) : '';
+        $short_from_post = isset($_POST['short_desc']) ? wp_kses_post($_POST['short_desc']) : '';
+        $technical_desc = $this->merge_short_desc_text($technical_desc, $short_from_post);
+
+        if($article_id) {
+            $existing = $wpdb->get_row($wpdb->prepare("SELECT technical_desc, short_desc FROM {$wpdb->prefix}kb_articles WHERE id=%d", $article_id));
+            if($existing && $existing->short_desc) {
+                $technical_desc = $this->merge_short_desc_text($technical_desc !== '' ? $technical_desc : $existing->technical_desc, $existing->short_desc);
+            }
+        }
+
+        if($technical_desc !== '') { $data['technical_desc'] = $technical_desc; }
+        $data['short_desc'] = null;
+
         $fields = [
-            'subject','short_desc','technical_desc',
             'technical_solution','solution_script',
             'post_check','check_script','links'
         ];
-        $data = [];
         foreach ($fields as $f) {
             if (isset($_POST[$f]) && $_POST[$f] != '') {
                 $data[$f] = wp_kses_post($_POST[$f]);
@@ -1575,8 +1609,14 @@ public function print_tree($cats, $parent, $table, $home_url) {
                 'vulnerability_level' => $vulnerability_level,
             ];
 
+            $tech_desc = isset($item['technical_desc']) ? wp_kses_post($item['technical_desc']) : '';
+            $short_desc = isset($item['short_desc']) ? wp_kses_post($item['short_desc']) : '';
+            $tech_desc = $this->merge_short_desc_text($tech_desc, $short_desc);
+            if($tech_desc !== '') { $data['technical_desc'] = $tech_desc; }
+            $data['short_desc'] = null;
+
             $text_fields = [
-                'short_desc','technical_desc','solution_script','post_check','check_script','links'
+                'solution_script','post_check','check_script','links'
             ];
             foreach($text_fields as $f) {
                 if(isset($item[$f]) && $item[$f] !== '') {
@@ -1693,6 +1733,7 @@ public function print_tree($cats, $parent, $table, $home_url) {
 
         $edit_id = isset($_GET['edit_article']) ? intval($_GET['edit_article']) : 0;
         $article = $edit_id ? $wpdb->get_row($wpdb->prepare("SELECT * FROM {$wpdb->prefix}kb_articles WHERE id=%d", $edit_id)) : null;
+        $article = $this->merge_short_desc_into_technical($article);
         $status_labels = $this->get_status_labels();
         $current_status = $article ? intval($article->review_status) : 0;
         $current_rating = $article ? intval($article->user_rating) : 0;
@@ -1762,9 +1803,6 @@ public function print_tree($cats, $parent, $table, $home_url) {
             
             <fieldset class="kb-fieldset">
                 <legend>פרטים</legend>
-                <div class="kb-row"><label class="kb-label">תיאור קצר:</label>
-                    <textarea class="kb-ckeditor kb-input" name="short_desc" id="pub_short_desc"><?php echo $article ? $article->short_desc : ''; ?></textarea>
-                </div>
                 <div class="kb-row"><label class="kb-label">תיאור טכני:</label>
                     <textarea class="kb-ckeditor kb-input" name="technical_desc" id="pub_technical_desc"><?php echo $article ? $article->technical_desc : ''; ?></textarea>
                 </div>
@@ -2021,7 +2059,6 @@ public function print_tree($cats, $parent, $table, $home_url) {
                             <th>דירוג (1-100)</th>
                             <th>פגיעות</th>
                             <th>סטטוס</th>
-                            <th>תיאור קצר</th>
                             <th>תיאור טכני</th>
                             <th>פתרון טכני*</th>
                             <th>סקריפט פתרון</th>
@@ -2124,7 +2161,6 @@ public function print_tree($cats, $parent, $table, $home_url) {
                             ${Object.keys(statusLabels).map(key=>`<option value="${key}">${statusLabels[key]}</option>`).join('')}
                         </select>
                     </td>
-                    <td><textarea name="short_desc" class="kb-grid-ckeditor"></textarea></td>
                     <td><textarea name="technical_desc" class="kb-grid-ckeditor"></textarea></td>
                     <td><textarea name="technical_solution" class="kb-grid-ckeditor" required></textarea></td>
                     <td><textarea name="solution_script" class="kb-input kb-grid-code" dir="ltr"></textarea></td>
@@ -2214,6 +2250,7 @@ public function print_tree($cats, $parent, $table, $home_url) {
         $archive_url = $archive_page ? get_permalink($archive_page->ID) : 'https://kb.macomp.co.il/?page_id=14311';
 
         $articles = $wpdb->get_results("SELECT * FROM $table WHERE (is_deleted IS NULL OR is_deleted=0) AND (is_archived IS NULL OR is_archived=0) ORDER BY created_at DESC");
+        foreach($articles as $a){ $this->merge_short_desc_into_technical($a); }
         $total_articles = count($articles);
         $status_labels = $this->get_status_labels();
         ob_start();
@@ -2724,6 +2761,7 @@ public function print_tree($cats, $parent, $table, $home_url) {
         $back_url = $atts['back_url'];
 
         $articles = $wpdb->get_results("SELECT * FROM $table WHERE is_deleted=1 ORDER BY created_at DESC");
+        foreach($articles as $a){ $this->merge_short_desc_into_technical($a); }
         $status_labels = $this->get_status_labels();
         $total_articles = count($articles);
 
@@ -3162,6 +3200,7 @@ public function print_tree($cats, $parent, $table, $home_url) {
         $back_url = $atts['back_url'];
 
         $articles = $wpdb->get_results("SELECT * FROM $table WHERE (is_archived=1) AND (is_deleted IS NULL OR is_deleted=0) ORDER BY subject ASC");
+        foreach($articles as $a){ $this->merge_short_desc_into_technical($a); }
         $status_labels = $this->get_status_labels();
         $total_articles = count($articles);
 
@@ -3605,6 +3644,7 @@ public function print_tree($cats, $parent, $table, $home_url) {
         if($article_id > 0){
             $article = $wpdb->get_row($wpdb->prepare("SELECT * FROM $table WHERE (is_deleted IS NULL OR is_deleted=0) AND (is_archived IS NULL OR is_archived=0) AND id=%d", $article_id));
             if(!$article) return '<div class="kb-notfound">❌ מאמר לא נמצא.</div>';
+            $article = $this->merge_short_desc_into_technical($article);
 
             $add_article_page = get_page_by_path('add-article');
             $edit_url = $add_article_page ? add_query_arg('edit_article', $article->id, get_permalink($add_article_page->ID)) : '';
@@ -3636,7 +3676,6 @@ public function print_tree($cats, $parent, $table, $home_url) {
                 <h1><?php echo esc_html($article->subject); ?></h1>
                 <?php echo $this->render_article_meta($article); ?>
                 <div class="kb-meta kb-meta-status"><?php echo $this->render_status_badge($article->review_status); ?></div>
-                <?php if($article->short_desc): ?><div class="kb-section"><h3>תיאור קצר</h3><?php echo $article->short_desc; ?></div><?php endif; ?>
                 <?php if($article->technical_desc): ?><div class="kb-section"><h3>תיאור טכני</h3><?php echo $article->technical_desc; ?></div><?php endif; ?>
                 <?php if($article->technical_solution): ?><div class="kb-section"><h3>פתרון טכני</h3><?php echo $article->technical_solution; ?></div><?php endif; ?>
                 <?php if($article->solution_script): ?>
@@ -3796,7 +3835,7 @@ public function print_tree($cats, $parent, $table, $home_url) {
                 $sql = "SELECT * FROM $table WHERE (is_deleted IS NULL OR is_deleted=0) AND (is_archived IS NULL OR is_archived=0)";
                 if($search !== '') {
                     $like = '%' . $wpdb->esc_like($search) . '%';
-                    $sql .= $wpdb->prepare(" AND (subject LIKE %s OR short_desc LIKE %s OR technical_desc LIKE %s OR category LIKE %s)", $like, $like, $like, $like);
+                    $sql .= $wpdb->prepare(" AND (subject LIKE %s OR technical_desc LIKE %s OR category LIKE %s)", $like, $like, $like);
                 }
                 if($cat_filter !== '' && $cat_filter !== 'all') {
                     $sql .= $wpdb->prepare(" AND category LIKE %s", '%'.$wpdb->esc_like($cat_filter).'%');
@@ -3806,8 +3845,9 @@ public function print_tree($cats, $parent, $table, $home_url) {
                 
                 if($results): ?>
                     <h2>נמצאו <?php echo count($results); ?> מאמרים</h2>
-                    <?php foreach($results as $article): 
-                        $excerpt = wp_strip_all_tags($article->short_desc ? $article->short_desc : $article->technical_desc);
+                    <?php foreach($results as $article):
+                        $article = $this->merge_short_desc_into_technical($article);
+                        $excerpt = wp_strip_all_tags($article->technical_desc);
                         $excerpt = mb_substr($excerpt, 0, 150) . '...';
                         $article_url = add_query_arg(['page_id' => $page_id, 'kb_article' => $article->id], home_url('/'));
                     ?>
