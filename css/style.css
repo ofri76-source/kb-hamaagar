@@ -950,3 +950,100 @@ a.kb-btn.kb-btn-outline,
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6), 0 1px 2px rgba(15, 23, 42, 0.04) !important;
   border-color: var(--kb-border) !important;
 }
+/* ===== תיקון תיבת חיפוש ===== */
+.kb-search-input,
+input[type="search"],
+input[type="text"].kb-search,
+.kb-table-search input,
+.kb-search-box input {
+  background: #ffffff !important;
+  border: 1px solid var(--kb-border) !important;
+  border-radius: 14px !important;
+  padding: 10px 14px !important;
+  font-size: 14px !important;
+  color: var(--kb-ink) !important;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.04) !important;
+  transition: border-color 0.2s ease !important;
+}
+
+.kb-search-input:focus,
+input[type="search"]:focus,
+.kb-table-search input:focus,
+.kb-search-box input:focus {
+  border-color: var(--kb-primary) !important;
+  outline: none !important;
+  box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.08) !important;
+}
+
+/* ===== כפתור סגירה / X ===== */
+.kb-btn-close,
+.kb-close-btn,
+button.kb-close,
+.kb-detail-row-close,
+button[aria-label="close"],
+button[aria-label="סגור"] {
+  background: #ffffff !important;
+  color: #64748b !important;
+  border: 1px solid var(--kb-border) !important;
+  border-radius: 10px !important;
+  padding: 6px 12px !important;
+  font-size: 14px !important;
+  cursor: pointer !important;
+  transition: all 0.15s ease !important;
+}
+
+.kb-btn-close:hover,
+.kb-close-btn:hover,
+button.kb-close:hover,
+.kb-detail-row-close:hover {
+  background: #f1f5f9 !important;
+  color: #0f172a !important;
+  border-color: #cbd5e1 !important;
+}
+
+/* כפתור X עגול */
+.kb-btn-icon,
+.kb-icon-btn {
+  width: 32px !important;
+  height: 32px !important;
+  border-radius: 50% !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  padding: 0 !important;
+  background: #ffffff !important;
+  border: 1px solid var(--kb-border) !important;
+  color: #64748b !important;
+}
+
+.kb-btn-icon:hover,
+.kb-icon-btn:hover {
+  background: #fee2e2 !important;
+  border-color: #fca5a5 !important;
+  color: #991b1b !important;
+}
+/* כפתור X - סגירת שורה / דיאלוג */
+button.kb-btn.kb-btn-close {
+  background: linear-gradient(135deg, #fee2e2, #fecaca) !important;
+  color: #991b1b !important;
+  border: 1px solid #0a0a0a !important;
+  box-shadow: 0 6px 12px rgba(239, 68, 68, 0.15) !important;
+}
+
+button.kb-btn.kb-btn-close:hover {
+  background: #fecaca !important;
+  color: #7f1d1d !important;
+}
+
+/* כפתור חיפוש ליד תיבת החיפוש */
+button.kb-btn.kb-btn-search {
+  background: linear-gradient(135deg, #7c3aed, #22d3ee) !important;
+  color: #ffffff !important;
+  border: none !important;
+  box-shadow: 0 10px 24px rgba(124, 58, 237, 0.25) !important;
+  padding-inline: 20px !important;
+}
+
+button.kb-btn.kb-btn-search:hover {
+  opacity: 0.95 !important;
+}
