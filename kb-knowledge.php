@@ -1591,7 +1591,7 @@ XML;
             wp_send_json_error(['message' => 'שדה נושא הוא שדה חובה']);
         }
         
-        $tech_solution = isset($_POST['technical_solution']) ? wp_kses_post($_POST['technical_solution']) : '';
+        $tech_solution = isset($_POST['technical_solution']) ? wp_kses_post(wp_unslash($_POST['technical_solution'])) : '';
         if(empty($tech_solution) || $tech_solution === '<p>&nbsp;</p>' || $tech_solution === '<p></p>') {
             wp_send_json_error(['message' => 'שדה פתרון טכני הוא שדה חובה']);
         }
@@ -1607,18 +1607,18 @@ XML;
         // ⭐ בדיקת כפילויות - רק אם זה מאמר חדש
         $article_id = isset($_POST['article_id']) ? intval($_POST['article_id']) : 0;
         if(!$article_id) {
-            $subject = sanitize_text_field($_POST['subject']);
+            $subject = isset($_POST['subject']) ? sanitize_text_field(wp_unslash($_POST['subject'])) : '';
             $existing = $wpdb->get_var($wpdb->prepare("SELECT id FROM {$wpdb->prefix}kb_articles WHERE subject = %s", $subject));
             if($existing) {
                 wp_send_json_error(['message' => 'קיים כבר מאמר עם אותו נושא! אנא בחר נושא אחר.']);
             }
         }
-        
-        $data = [];
-        $data['subject'] = sanitize_text_field($_POST['subject']);
 
-        $technical_desc = isset($_POST['technical_desc']) ? wp_kses_post($_POST['technical_desc']) : '';
-        $short_from_post = isset($_POST['short_desc']) ? wp_kses_post($_POST['short_desc']) : '';
+        $data = [];
+        $data['subject'] = isset($_POST['subject']) ? sanitize_text_field(wp_unslash($_POST['subject'])) : '';
+
+        $technical_desc = isset($_POST['technical_desc']) ? wp_kses_post(wp_unslash($_POST['technical_desc'])) : '';
+        $short_from_post = isset($_POST['short_desc']) ? wp_kses_post(wp_unslash($_POST['short_desc'])) : '';
         $technical_desc = $this->merge_short_desc_text($technical_desc, $short_from_post);
 
         if($article_id) {
@@ -1637,7 +1637,7 @@ XML;
         ];
         foreach ($fields as $f) {
             if (isset($_POST[$f]) && $_POST[$f] != '') {
-                $data[$f] = wp_kses_post($_POST[$f]);
+                $data[$f] = wp_kses_post(wp_unslash($_POST[$f]));
             }
         }
 
