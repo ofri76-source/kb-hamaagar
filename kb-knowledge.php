@@ -814,34 +814,34 @@ class KB_KnowledgeBase_Editor {
 
             if(!$current) continue;
 
-            if(preg_match('/^Subject\s*:\s*(.+)$/i', $text, $m)) {
-                $current['subject'] = $m[1];
+            if(preg_match('/Subject\s*:\s*(.+)/iu', $text, $m)) {
+                $current['subject'] = trim($m[1]);
                 continue;
             }
-            if(preg_match('/^Category\s*:\s*(.+)$/i', $text, $m)) {
-                $current['main_category'] = $m[1];
+            if(preg_match('/Category\s*:\s*(.+)/iu', $text, $m)) {
+                $current['main_category'] = trim($m[1]);
                 continue;
             }
-            if(preg_match('/^Subcategory\s*:\s*(.+)$/i', $text, $m)) {
-                $current['sub_category'] = $m[1];
+            if(preg_match('/Subcategory\s*:\s*(.+)/iu', $text, $m)) {
+                $current['sub_category'] = trim($m[1]);
                 continue;
             }
-            if(preg_match('/^Review Status\s*:\s*(.+)$/i', $text, $m)) {
+            if(preg_match('/Review Status\s*:\s*(.+)/iu', $text, $m)) {
                 $current['review_status'] = $this->normalize_status_from_text($m[1]);
                 continue;
             }
-            if(preg_match('/^Rating\s*:\s*(.+)$/i', $text, $m)) {
+            if(preg_match('/Rating\s*:\s*(.+)/iu', $text, $m)) {
                 $rating_val = trim($m[1]);
                 $rating_int = ($rating_val === '') ? null : intval($rating_val);
                 $current['user_rating'] = ($rating_int >=1 && $rating_int <=100) ? $rating_int : null;
                 continue;
             }
-            if(preg_match('/^Vulnerability\s*:\s*(.+)$/i', $text, $m)) {
-                $current['vulnerability_level'] = $this->normalize_vulnerability_from_text($m[1]);
+            if(preg_match('/Vulnerability\s*:\s*(.+)/iu', $text, $m)) {
+                $current['vulnerability_level'] = $this->normalize_vulnerability_from_text(trim($m[1]));
                 continue;
             }
-            if(preg_match('/^Links\s*:\s*(.+)$/i', $text, $m)) {
-                $current['links'] = $m[1];
+            if(preg_match('/Links\s*:\s*(.+)/iu', $text, $m)) {
+                $current['links'] = trim($m[1]);
                 continue;
             }
 
@@ -858,6 +858,14 @@ class KB_KnowledgeBase_Editor {
                 if(stripos($text, $label) === 0) { $matched_section = $key; break; }
             }
             if($matched_section) { $current_section = $matched_section; continue; }
+
+            // Fallback: treat the first non-label paragraph after [[ARTICLE]] as the subject if the explicit label is missing.
+            if($current && $current['subject'] === '' && trim($text) !== '' && $current_section === '') {
+                if(!preg_match('/\w+\s*:/u', $text)) {
+                    $current['subject'] = trim($text);
+                    continue;
+                }
+            }
 
             if($current_section && $html) {
                 $current['sections'][$current_section][] = $html;
