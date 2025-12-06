@@ -520,7 +520,7 @@ class KB_KnowledgeBase_Editor {
         return [0=>'לא נבדק',1=>'בתהליך',2=>'תקין'];
     }
 
-    private function render_status_badge($status) {
+    private function render_status_badge($status, $with_label = true) {
         $status = is_null($status) ? 0 : intval($status);
         $labels = $this->get_status_labels();
         $label = isset($labels[$status]) ? $labels[$status] : $labels[0];
@@ -528,6 +528,9 @@ class KB_KnowledgeBase_Editor {
         if($status === 2) { $class .= 'kb-status-badge--green'; $dot = '🟢'; }
         elseif($status === 1) { $class .= 'kb-status-badge--orange'; $dot = '🟠'; }
         else { $class .= 'kb-status-badge--red'; $dot = '🔴'; }
+        if(!$with_label) {
+            return '<span class="'.$class.' kb-status-dot" title="'.esc_attr($label).'">'.$dot.'<span class="kb-visually-hidden"> '.$label.'</span></span>';
+        }
         return '<span class="'.$class.'">'.$dot.' '.$label.'</span>';
     }
 
@@ -2271,42 +2274,42 @@ XML;
                             <th class="kb-sortable" data-sort-key="subject">
                                 <div class="kb-th-inner">
                                     <span>נושא*</span>
-                                    <button type="button" class="kb-filter-toggle" data-filter-key="subjectLabel" aria-label="סינון נושא"><span class="kb-filter-caret">▼</span></button>
+                                    <button type="button" class="kb-filter-toggle" data-filter-key="subjectLabel" aria-label="סינון נושא"><span class="kb-filter-caret" aria-hidden="true"></span></button>
                                 </div>
                                 <div class="kb-filter-menu" data-filter-menu="subjectLabel"></div>
                             </th>
                             <th class="kb-sortable" data-sort-key="maincat">
                                 <div class="kb-th-inner">
                                     <span>קטגוריה</span>
-                                    <button type="button" class="kb-filter-toggle" data-filter-key="maincatLabel" aria-label="סינון קטגוריה"><span class="kb-filter-caret">▼</span></button>
+                                    <button type="button" class="kb-filter-toggle" data-filter-key="maincatLabel" aria-label="סינון קטגוריה"><span class="kb-filter-caret" aria-hidden="true"></span></button>
                                 </div>
                                 <div class="kb-filter-menu" data-filter-menu="maincatLabel"></div>
                             </th>
                             <th class="kb-sortable" data-sort-key="subcat">
                                 <div class="kb-th-inner">
                                     <span>תת קטגוריה</span>
-                                    <button type="button" class="kb-filter-toggle" data-filter-key="subcatLabel" aria-label="סינון תת קטגוריה"><span class="kb-filter-caret">▼</span></button>
+                                    <button type="button" class="kb-filter-toggle" data-filter-key="subcatLabel" aria-label="סינון תת קטגוריה"><span class="kb-filter-caret" aria-hidden="true"></span></button>
                                 </div>
                                 <div class="kb-filter-menu" data-filter-menu="subcatLabel"></div>
                             </th>
                             <th class="kb-sortable" data-sort-key="rating">
                                 <div class="kb-th-inner">
                                     <span>דירוג (1-100)</span>
-                                    <button type="button" class="kb-filter-toggle" data-filter-key="rating" aria-label="סינון דירוג"><span class="kb-filter-caret">▼</span></button>
+                                    <button type="button" class="kb-filter-toggle" data-filter-key="rating" aria-label="סינון דירוג"><span class="kb-filter-caret" aria-hidden="true"></span></button>
                                 </div>
                                 <div class="kb-filter-menu" data-filter-menu="rating"></div>
                             </th>
                             <th class="kb-sortable" data-sort-key="vulnerability">
                                 <div class="kb-th-inner">
                                     <span>פגיעות</span>
-                                    <button type="button" class="kb-filter-toggle" data-filter-key="vulnerabilityLabel" aria-label="סינון פגיעות"><span class="kb-filter-caret">▼</span></button>
+                                    <button type="button" class="kb-filter-toggle" data-filter-key="vulnerabilityLabel" aria-label="סינון פגיעות"><span class="kb-filter-caret" aria-hidden="true"></span></button>
                                 </div>
                                 <div class="kb-filter-menu" data-filter-menu="vulnerabilityLabel"></div>
                             </th>
                             <th class="kb-sortable" data-sort-key="status">
                                 <div class="kb-th-inner">
                                     <span>סטטוס</span>
-                                    <button type="button" class="kb-filter-toggle" data-filter-key="statusLabel" aria-label="סינון סטטוס"><span class="kb-filter-caret">▼</span></button>
+                                    <button type="button" class="kb-filter-toggle" data-filter-key="statusLabel" aria-label="סינון סטטוס"><span class="kb-filter-caret" aria-hidden="true"></span></button>
                                 </div>
                                 <div class="kb-filter-menu" data-filter-menu="statusLabel"></div>
                             </th>
@@ -2715,49 +2718,49 @@ XML;
                         <th class="kb-sortable" data-sort-key="subject">
                             <div class="kb-th-inner">
                                 <span>נושא</span>
-                                <button type="button" class="kb-filter-toggle" data-filter-key="subjectLabel" aria-label="סינון נושא"><span class="kb-filter-caret">▼</span></button>
+                                <button type="button" class="kb-filter-toggle" data-filter-key="subjectLabel" aria-label="סינון נושא"><span class="kb-filter-caret" aria-hidden="true"></span></button>
                             </div>
                             <div class="kb-filter-menu" data-filter-menu="subjectLabel"></div>
                         </th>
-                        <th class="kb-sortable" data-sort-key="maincat">
+                        <th class="kb-sortable kb-col-maincat" data-sort-key="maincat">
                             <div class="kb-th-inner">
                                 <span>קטגוריה</span>
-                                <button type="button" class="kb-filter-toggle" data-filter-key="maincatLabel" aria-label="סינון קטגוריה"><span class="kb-filter-caret">▼</span></button>
+                                <button type="button" class="kb-filter-toggle" data-filter-key="maincatLabel" aria-label="סינון קטגוריה"><span class="kb-filter-caret" aria-hidden="true"></span></button>
                             </div>
                             <div class="kb-filter-menu" data-filter-menu="maincatLabel"></div>
                         </th>
-                        <th class="kb-sortable" data-sort-key="subcat">
+                        <th class="kb-sortable kb-col-subcat" data-sort-key="subcat">
                             <div class="kb-th-inner">
                                 <span>תת קטגוריה</span>
-                                <button type="button" class="kb-filter-toggle" data-filter-key="subcatLabel" aria-label="סינון תת קטגוריה"><span class="kb-filter-caret">▼</span></button>
+                                <button type="button" class="kb-filter-toggle" data-filter-key="subcatLabel" aria-label="סינון תת קטגוריה"><span class="kb-filter-caret" aria-hidden="true"></span></button>
                             </div>
                             <div class="kb-filter-menu" data-filter-menu="subcatLabel"></div>
                         </th>
                         <th class="kb-sortable" data-sort-key="status">
                             <div class="kb-th-inner">
                                 <span>נבדק</span>
-                                <button type="button" class="kb-filter-toggle" data-filter-key="statusLabel" aria-label="סינון סטטוס"><span class="kb-filter-caret">▼</span></button>
+                                <button type="button" class="kb-filter-toggle" data-filter-key="statusLabel" aria-label="סינון סטטוס"><span class="kb-filter-caret" aria-hidden="true"></span></button>
                             </div>
                             <div class="kb-filter-menu" data-filter-menu="statusLabel"></div>
                         </th>
-                        <th class="kb-sortable" data-sort-key="rating">
+                        <th class="kb-sortable kb-col-rating" data-sort-key="rating">
                             <div class="kb-th-inner">
                                 <span>דירוג</span>
-                                <button type="button" class="kb-filter-toggle" data-filter-key="rating" aria-label="סינון דירוג"><span class="kb-filter-caret">▼</span></button>
+                                <button type="button" class="kb-filter-toggle" data-filter-key="rating" aria-label="סינון דירוג"><span class="kb-filter-caret" aria-hidden="true"></span></button>
                             </div>
                             <div class="kb-filter-menu" data-filter-menu="rating"></div>
                         </th>
                         <th class="kb-sortable" data-sort-key="execution">
                             <div class="kb-th-inner">
                                 <span>ביצוע</span>
-                                <button type="button" class="kb-filter-toggle" data-filter-key="executionLabel" aria-label="סינון סוג ביצוע"><span class="kb-filter-caret">▼</span></button>
+                                <button type="button" class="kb-filter-toggle" data-filter-key="executionLabel" aria-label="סינון סוג ביצוע"><span class="kb-filter-caret" aria-hidden="true"></span></button>
                             </div>
                             <div class="kb-filter-menu" data-filter-menu="executionLabel"></div>
                         </th>
                         <th class="kb-sortable" data-sort-key="vulnerability">
                             <div class="kb-th-inner">
                                 <span>פגיעות <span class="kb-help-icon" data-tooltip="פגיעות של הארגון לשינוי">?</span></span>
-                                <button type="button" class="kb-filter-toggle" data-filter-key="vulnerabilityLabel" aria-label="סינון פגיעות"><span class="kb-filter-caret">▼</span></button>
+                                <button type="button" class="kb-filter-toggle" data-filter-key="vulnerabilityLabel" aria-label="סינון פגיעות"><span class="kb-filter-caret" aria-hidden="true"></span></button>
                             </div>
                             <div class="kb-filter-menu" data-filter-menu="vulnerabilityLabel"></div>
                         </th>
@@ -2778,10 +2781,10 @@ XML;
                     <tr class="kb-table-row" data-article-id="<?php echo intval($article->id); ?>" data-subject="<?php echo esc_attr(mb_strtolower($article->subject)); ?>" data-subject-label="<?php echo esc_attr($article->subject); ?>" data-maincat="<?php echo esc_attr(mb_strtolower($main_cat)); ?>" data-maincat-label="<?php echo esc_attr($main_cat); ?>" data-subcat="<?php echo esc_attr(mb_strtolower($sub_cat)); ?>" data-subcat-label="<?php echo esc_attr($sub_cat); ?>" data-status="<?php echo intval($article->review_status); ?>" data-status-label="<?php echo esc_attr($status_label); ?>" data-rating="<?php echo is_null($rating_value) ? '' : intval($rating_value); ?>" data-execution="<?php echo $execution_mode==='אוטומטי' ? 'auto' : 'manual'; ?>" data-execution-label="<?php echo esc_attr($execution_mode); ?>" data-vulnerability="<?php echo $vulnerability_level ? intval($vulnerability_level) : ''; ?>" data-vulnerability-label="<?php echo esc_attr($vulnerability_label); ?>">
                         <td><?php if(current_user_can('manage_options')): ?><input type="checkbox" name="kb_selected[]" value="<?php echo intval($article->id); ?>" class="kb-row-select"><?php endif; ?></td>
                         <td><?php echo esc_html($article->subject); ?></td>
-                        <td><?php echo esc_html($main_cat); ?></td>
-                        <td><?php echo esc_html($sub_cat); ?></td>
-                        <td><?php echo $this->render_status_badge($article->review_status); ?></td>
-                        <td><?php echo $this->render_rating_badge($article); ?></td>
+                        <td class="kb-col-maincat">&lrm;<?php echo esc_html($main_cat); ?></td>
+                        <td class="kb-col-subcat">&lrm;<?php echo esc_html($sub_cat); ?></td>
+                        <td><?php echo $this->render_status_badge($article->review_status, false); ?></td>
+                        <td class="kb-col-rating"><?php echo $this->render_rating_badge($article); ?></td>
                         <td><span class="kb-execution-chip <?php echo $execution_mode==='אוטומטי' ? 'kb-execution-auto' : 'kb-execution-manual'; ?>"><?php echo esc_html($execution_mode); ?></span></td>
                         <td><?php echo $vulnerability_label ? esc_html($vulnerability_label) : ''; ?></td>
                     </tr>
@@ -3228,49 +3231,49 @@ XML;
                         <th class="kb-sortable" data-sort-key="subject">
                             <div class="kb-th-inner">
                                 <span>נושא</span>
-                                <button type="button" class="kb-filter-toggle" data-filter-key="subjectLabel" aria-label="סינון נושא"><span class="kb-filter-caret">▼</span></button>
+                                <button type="button" class="kb-filter-toggle" data-filter-key="subjectLabel" aria-label="סינון נושא"><span class="kb-filter-caret" aria-hidden="true"></span></button>
                             </div>
                             <div class="kb-filter-menu" data-filter-menu="subjectLabel"></div>
                         </th>
                         <th class="kb-sortable" data-sort-key="maincat">
                             <div class="kb-th-inner">
                                 <span>קטגוריה</span>
-                                <button type="button" class="kb-filter-toggle" data-filter-key="maincatLabel" aria-label="סינון קטגוריה"><span class="kb-filter-caret">▼</span></button>
+                                <button type="button" class="kb-filter-toggle" data-filter-key="maincatLabel" aria-label="סינון קטגוריה"><span class="kb-filter-caret" aria-hidden="true"></span></button>
                             </div>
                             <div class="kb-filter-menu" data-filter-menu="maincatLabel"></div>
                         </th>
                         <th class="kb-sortable" data-sort-key="subcat">
                             <div class="kb-th-inner">
                                 <span>תת קטגוריה</span>
-                                <button type="button" class="kb-filter-toggle" data-filter-key="subcatLabel" aria-label="סינון תת קטגוריה"><span class="kb-filter-caret">▼</span></button>
+                                <button type="button" class="kb-filter-toggle" data-filter-key="subcatLabel" aria-label="סינון תת קטגוריה"><span class="kb-filter-caret" aria-hidden="true"></span></button>
                             </div>
                             <div class="kb-filter-menu" data-filter-menu="subcatLabel"></div>
                         </th>
                         <th class="kb-sortable" data-sort-key="status">
                             <div class="kb-th-inner">
                                 <span>נבדק</span>
-                                <button type="button" class="kb-filter-toggle" data-filter-key="statusLabel" aria-label="סינון סטטוס"><span class="kb-filter-caret">▼</span></button>
+                                <button type="button" class="kb-filter-toggle" data-filter-key="statusLabel" aria-label="סינון סטטוס"><span class="kb-filter-caret" aria-hidden="true"></span></button>
                             </div>
                             <div class="kb-filter-menu" data-filter-menu="statusLabel"></div>
                         </th>
                         <th class="kb-sortable" data-sort-key="rating">
                             <div class="kb-th-inner">
                                 <span>דירוג</span>
-                                <button type="button" class="kb-filter-toggle" data-filter-key="rating" aria-label="סינון דירוג"><span class="kb-filter-caret">▼</span></button>
+                                <button type="button" class="kb-filter-toggle" data-filter-key="rating" aria-label="סינון דירוג"><span class="kb-filter-caret" aria-hidden="true"></span></button>
                             </div>
                             <div class="kb-filter-menu" data-filter-menu="rating"></div>
                         </th>
                         <th class="kb-sortable" data-sort-key="execution">
                             <div class="kb-th-inner">
                                 <span>ביצוע</span>
-                                <button type="button" class="kb-filter-toggle" data-filter-key="executionLabel" aria-label="סינון סוג ביצוע"><span class="kb-filter-caret">▼</span></button>
+                                <button type="button" class="kb-filter-toggle" data-filter-key="executionLabel" aria-label="סינון סוג ביצוע"><span class="kb-filter-caret" aria-hidden="true"></span></button>
                             </div>
                             <div class="kb-filter-menu" data-filter-menu="executionLabel"></div>
                         </th>
                         <th class="kb-sortable" data-sort-key="vulnerability">
                             <div class="kb-th-inner">
                                 <span>פגיעות <span class="kb-help-icon" data-tooltip="פגיעות של הארגון לשינוי">?</span></span>
-                                <button type="button" class="kb-filter-toggle" data-filter-key="vulnerabilityLabel" aria-label="סינון פגיעות"><span class="kb-filter-caret">▼</span></button>
+                                <button type="button" class="kb-filter-toggle" data-filter-key="vulnerabilityLabel" aria-label="סינון פגיעות"><span class="kb-filter-caret" aria-hidden="true"></span></button>
                             </div>
                             <div class="kb-filter-menu" data-filter-menu="vulnerabilityLabel"></div>
                         </th>
@@ -3663,49 +3666,49 @@ XML;
                         <th class="kb-sortable" data-sort-key="subject">
                             <div class="kb-th-inner">
                                 <span>נושא</span>
-                                <button type="button" class="kb-filter-toggle" data-filter-key="subjectLabel" aria-label="סינון נושא"><span class="kb-filter-caret">▼</span></button>
+                                <button type="button" class="kb-filter-toggle" data-filter-key="subjectLabel" aria-label="סינון נושא"><span class="kb-filter-caret" aria-hidden="true"></span></button>
                             </div>
                             <div class="kb-filter-menu" data-filter-menu="subjectLabel"></div>
                         </th>
                         <th class="kb-sortable" data-sort-key="maincat">
                             <div class="kb-th-inner">
                                 <span>קטגוריה</span>
-                                <button type="button" class="kb-filter-toggle" data-filter-key="maincatLabel" aria-label="סינון קטגוריה"><span class="kb-filter-caret">▼</span></button>
+                                <button type="button" class="kb-filter-toggle" data-filter-key="maincatLabel" aria-label="סינון קטגוריה"><span class="kb-filter-caret" aria-hidden="true"></span></button>
                             </div>
                             <div class="kb-filter-menu" data-filter-menu="maincatLabel"></div>
                         </th>
                         <th class="kb-sortable" data-sort-key="subcat">
                             <div class="kb-th-inner">
                                 <span>תת קטגוריה</span>
-                                <button type="button" class="kb-filter-toggle" data-filter-key="subcatLabel" aria-label="סינון תת קטגוריה"><span class="kb-filter-caret">▼</span></button>
+                                <button type="button" class="kb-filter-toggle" data-filter-key="subcatLabel" aria-label="סינון תת קטגוריה"><span class="kb-filter-caret" aria-hidden="true"></span></button>
                             </div>
                             <div class="kb-filter-menu" data-filter-menu="subcatLabel"></div>
                         </th>
                         <th class="kb-sortable" data-sort-key="status">
                             <div class="kb-th-inner">
                                 <span>נבדק</span>
-                                <button type="button" class="kb-filter-toggle" data-filter-key="statusLabel" aria-label="סינון סטטוס"><span class="kb-filter-caret">▼</span></button>
+                                <button type="button" class="kb-filter-toggle" data-filter-key="statusLabel" aria-label="סינון סטטוס"><span class="kb-filter-caret" aria-hidden="true"></span></button>
                             </div>
                             <div class="kb-filter-menu" data-filter-menu="statusLabel"></div>
                         </th>
                         <th class="kb-sortable" data-sort-key="rating">
                             <div class="kb-th-inner">
                                 <span>דירוג</span>
-                                <button type="button" class="kb-filter-toggle" data-filter-key="rating" aria-label="סינון דירוג"><span class="kb-filter-caret">▼</span></button>
+                                <button type="button" class="kb-filter-toggle" data-filter-key="rating" aria-label="סינון דירוג"><span class="kb-filter-caret" aria-hidden="true"></span></button>
                             </div>
                             <div class="kb-filter-menu" data-filter-menu="rating"></div>
                         </th>
                         <th class="kb-sortable" data-sort-key="execution">
                             <div class="kb-th-inner">
                                 <span>ביצוע</span>
-                                <button type="button" class="kb-filter-toggle" data-filter-key="executionLabel" aria-label="סינון סוג ביצוע"><span class="kb-filter-caret">▼</span></button>
+                                <button type="button" class="kb-filter-toggle" data-filter-key="executionLabel" aria-label="סינון סוג ביצוע"><span class="kb-filter-caret" aria-hidden="true"></span></button>
                             </div>
                             <div class="kb-filter-menu" data-filter-menu="executionLabel"></div>
                         </th>
                         <th class="kb-sortable" data-sort-key="vulnerability">
                             <div class="kb-th-inner">
                                 <span>פגיעות <span class="kb-help-icon" data-tooltip="פגיעות של הארגון לשינוי">?</span></span>
-                                <button type="button" class="kb-filter-toggle" data-filter-key="vulnerabilityLabel" aria-label="סינון פגיעות"><span class="kb-filter-caret">▼</span></button>
+                                <button type="button" class="kb-filter-toggle" data-filter-key="vulnerabilityLabel" aria-label="סינון פגיעות"><span class="kb-filter-caret" aria-hidden="true"></span></button>
                             </div>
                             <div class="kb-filter-menu" data-filter-menu="vulnerabilityLabel"></div>
                         </th>
