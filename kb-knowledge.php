@@ -1205,6 +1205,8 @@ XML;
             wp_safe_redirect($redirect_url);
             exit;
         }
+
+        wp_send_json_success($result);
     }
 
     public function main_page() {
