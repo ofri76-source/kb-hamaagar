@@ -271,7 +271,17 @@
 .kb-status-badge--red { background: #fee2e2; color: #b91c1c; }
 .kb-status-badge--orange { background: #ffedd5; color: #c2410c; }
 .kb-status-badge--green { background: #dcfce7; color: #15803d; }
-.kb-status-dot { padding: 4px 8px; }
+.kb-status-dot {
+  padding: 0;
+  background: transparent;
+  border: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  line-height: 1;
+  width: 100%;
+}
 .kb-visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 
 /* Alerts */
@@ -307,6 +317,12 @@
   padding: 6px 10px;
   font-weight: 700;
   color: var(--kb-ink);
+}
+
+.kb-meta-chip--folder-main {
+  background: linear-gradient(135deg, #fff7ed, #ffedd5);
+  border-color: #fdba74;
+  color: #9a3412;
 }
 
 .kb-rating-badge { background: linear-gradient(135deg, rgba(124, 58, 237, 0.12), rgba(34, 211, 238, 0.12)); }
@@ -392,6 +408,15 @@
   background: var(--kb-surface);
 }
 
+.kb-table-view-table th,
+.kb-table-view-table td,
+.kb-trash-view th,
+.kb-trash-view td,
+.kb-archive-view th,
+.kb-archive-view td {
+  text-align: center;
+}
+
 .kb-table tr:hover td,
 .kb-admin-table tr:hover td,
 .kb-table-view-table tr:hover td,
@@ -460,12 +485,11 @@
 .kb-table-view-table th.kb-col-maincat,
 .kb-table-view-table td.kb-col-maincat,
 .kb-table-view-table th.kb-col-subcat,
-.kb-table-view-table td.kb-col-subcat {
-  text-align: left;
-}
-
+.kb-table-view-table td.kb-col-subcat,
 .kb-table-view-table th.kb-col-rating,
-.kb-table-view-table td.kb-col-rating {
+.kb-table-view-table td.kb-col-rating,
+.kb-table-view-table th.kb-col-status,
+.kb-table-view-table td.kb-col-status {
   text-align: center;
 }
 
@@ -598,6 +622,30 @@
 .kb-dot--red { color: var(--kb-danger); }
 .kb-settings-help { color: var(--kb-muted); }
 .kb-table-view-container .kb-detail-row-close { margin-inline-start: auto; }
+
+/* High-contrast buttons override */
+.kb-container .kb-btn,
+.kb-container button,
+.kb-container input[type="submit"],
+.kb-container input[type="button"],
+.kb-container .button,
+.kb-table-view-container .kb-btn {
+  background: linear-gradient(135deg, #e0e7ff, #c7d2fe);
+  color: #0b1220 !important;
+  border: 1px solid #1d4ed8;
+  box-shadow: 0 8px 18px rgba(37, 99, 235, 0.18);
+  font-weight: 700;
+}
+
+.kb-container .kb-btn:hover,
+.kb-container button:hover,
+.kb-container input[type="submit"]:hover,
+.kb-container input[type="button"]:hover,
+.kb-container .button:hover,
+.kb-table-view-container .kb-btn:hover {
+  background: linear-gradient(135deg, #cbd5ff, #93c5fd);
+  color: #0b1220 !important;
+}
 
 .kb-home-header h2,
 .kb-public-form-header h2,
