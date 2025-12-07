@@ -951,6 +951,29 @@ class KB_KnowledgeBase_Editor {
             if($current_section && $html) {
                 $current['sections'][$current_section][] = $html;
             }
+
+            $prepared['technical_desc'] = $this->merge_short_desc_text(
+                isset($prepared['technical_desc']) ? $prepared['technical_desc'] : '',
+                isset($prepared['short_desc']) ? $prepared['short_desc'] : ''
+            );
+            unset($prepared['short_desc']);
+
+            $rating = isset($article['user_rating']) ? intval($article['user_rating']) : null;
+            if($rating < 1 || $rating > 100) { $rating = null; }
+
+            $data = array_merge($prepared, [
+                'subject' => $subject,
+                'category' => $category_value,
+                'links' => wp_kses_post($article['links']),
+                'review_status' => intval($article['review_status']),
+                'user_rating' => $rating,
+                'vulnerability_level' => $this->normalize_vulnerability_from_text($article['vulnerability_level']),
+                'is_deleted' => 0,
+                'is_archived' => 0,
+            ]);
+
+            $wpdb->insert($wpdb->prefix.'kb_articles', $data);
+            $created++;
         }
 
         if($current) { $articles[] = $current; }
