@@ -267,6 +267,8 @@ class KB_KnowledgeBase_Editor {
             $options .= '<option value="'.intval($c->id).'">'.esc_html($c->category_name).'</option>';
         }
 
+        static $kb_copy_helper_added = false;
+
         ob_start();
         ?>
         <div class="kb-container">
@@ -949,6 +951,29 @@ class KB_KnowledgeBase_Editor {
             if($current_section && $html) {
                 $current['sections'][$current_section][] = $html;
             }
+
+            $prepared['technical_desc'] = $this->merge_short_desc_text(
+                isset($prepared['technical_desc']) ? $prepared['technical_desc'] : '',
+                isset($prepared['short_desc']) ? $prepared['short_desc'] : ''
+            );
+            unset($prepared['short_desc']);
+
+            $rating = isset($article['user_rating']) ? intval($article['user_rating']) : null;
+            if($rating < 1 || $rating > 100) { $rating = null; }
+
+            $data = array_merge($prepared, [
+                'subject' => $subject,
+                'category' => $category_value,
+                'links' => wp_kses_post($article['links']),
+                'review_status' => intval($article['review_status']),
+                'user_rating' => $rating,
+                'vulnerability_level' => $this->normalize_vulnerability_from_text($article['vulnerability_level']),
+                'is_deleted' => 0,
+                'is_archived' => 0,
+            ]);
+
+            $wpdb->insert($wpdb->prefix.'kb_articles', $data);
+            $created++;
         }
 
         if($current) { $articles[] = $current; }
@@ -1186,17 +1211,25 @@ XML;
                 <div class="kb-section <?php echo $align; ?>"><h3>פתרון טכני</h3><?php echo $article->technical_solution; ?></div>
             <?php endif; ?>
             <?php if($article->solution_script): ?>
+            <?php $sol_id = 'kb_sol_' . uniqid(); ?>
             <div class="kb-section kb-script-section">
-                <h3>סקריפט פתרון</h3>
-                <pre dir="ltr"><?php echo esc_html($article->solution_script); ?></pre>
+                <div class="kb-script-actions">
+                    <button type="button" class="kb-copy-btn-inline" onclick="kbCopyScript('<?php echo $sol_id; ?>')">📋 העתק</button>
+                </div>
+                <pre id="<?php echo $sol_id; ?>" dir="ltr"><?php echo esc_html($article->solution_script); ?></pre>
+                <div class="kb-script-actions kb-script-actions-bottom">
+                    <button type="button" class="kb-copy-btn-inline" onclick="kbCopyScript('<?php echo $sol_id; ?>')">📋 העתק</button>
+                </div>
             </div>
             <?php endif; ?>
             <?php if($article->solution_files):
                 $files = json_decode($article->solution_files, true);
                 if($files): ?>
             <div class="kb-section"><h3>קבצים מצורפים</h3>
-                <?php foreach($files as $file): ?>
-                    <a href="<?php echo esc_url($file); ?>" target="_blank" class="kb-download-btn">📥 <?php echo basename($file); ?></a><br>
+                <?php foreach($files as $file): $align = $this->get_alignment_class($file); ?>
+                    <div class="kb-attachment <?php echo $align; ?>">
+                        <a href="<?php echo esc_url($file); ?>" target="_blank" class="kb-download-btn">📥 <?php echo basename($file); ?></a>
+                    </div>
                 <?php endforeach; ?>
             </div>
             <?php endif; endif; ?>
@@ -1205,17 +1238,25 @@ XML;
                 <div class="kb-section <?php echo $align; ?>"><h3>בדיקת פתרון</h3><?php echo $article->post_check; ?></div>
             <?php endif; ?>
             <?php if($article->check_script): ?>
+            <?php $check_id = 'kb_check_' . uniqid(); ?>
             <div class="kb-section kb-script-section">
-                <h3>סקריפט בדיקה</h3>
-                <pre dir="ltr"><?php echo esc_html($article->check_script); ?></pre>
+                <div class="kb-script-actions">
+                    <button type="button" class="kb-copy-btn-inline" onclick="kbCopyScript('<?php echo $check_id; ?>')">📋 העתק</button>
+                </div>
+                <pre id="<?php echo $check_id; ?>" dir="ltr"><?php echo esc_html($article->check_script); ?></pre>
+                <div class="kb-script-actions kb-script-actions-bottom">
+                    <button type="button" class="kb-copy-btn-inline" onclick="kbCopyScript('<?php echo $check_id; ?>')">📋 העתק</button>
+                </div>
             </div>
             <?php endif; ?>
             <?php if($article->check_files):
                 $files = json_decode($article->check_files, true);
                 if($files): ?>
             <div class="kb-section"><h3>קבצי בדיקה</h3>
-                <?php foreach($files as $file): ?>
-                    <a href="<?php echo esc_url($file); ?>" target="_blank" class="kb-download-btn">📥 <?php echo basename($file); ?></a><br>
+                <?php foreach($files as $file): $align = $this->get_alignment_class($file); ?>
+                    <div class="kb-attachment <?php echo $align; ?>">
+                        <a href="<?php echo esc_url($file); ?>" target="_blank" class="kb-download-btn">📥 <?php echo basename($file); ?></a>
+                    </div>
                 <?php endforeach; ?>
             </div>
             <?php endif; endif; ?>
@@ -1225,6 +1266,29 @@ XML;
             <?php endif; ?>
         </div>
         <?php
+        if(!$kb_copy_helper_added){
+            $kb_copy_helper_added = true;
+            ?>
+            <script>
+            function kbCopyScript(targetId){
+                var el = document.getElementById(targetId);
+                if(!el) return;
+                var range = document.createRange();
+                range.selectNodeContents(el);
+                var sel = window.getSelection();
+                sel.removeAllRanges();
+                sel.addRange(range);
+                document.execCommand('copy');
+                setTimeout(function(){ sel.removeAllRanges(); }, 100);
+            }
+            </script>
+            <style>
+            .kb-script-actions { display:flex; justify-content:flex-end; margin-bottom:8px; }
+            .kb-script-actions-bottom { margin-top:8px; }
+            .kb-attachment { margin:4px 0; }
+            </style>
+            <?php
+        }
         return ob_get_clean();
     }
 
@@ -4224,34 +4288,48 @@ XML;
                 <?php if($article->technical_solution): ?><div class="kb-section"><h3>פתרון טכני</h3><?php echo $article->technical_solution; ?></div><?php endif; ?>
                 <?php if($article->solution_script): ?>
                 <div class="kb-section kb-script-section">
-                    <h3>סקריפט פתרון <button type="button" class="kb-copy-btn-inline" onclick="copyScript('sol_script')">📋 העתק</button></h3>
+                    <div class="kb-script-actions">
+                        <button type="button" class="kb-copy-btn-inline" onclick="copyScript('sol_script')">📋 העתק</button>
+                    </div>
                     <pre id="sol_script" dir="ltr"><?php echo esc_html($article->solution_script); ?></pre>
+                    <div class="kb-script-actions kb-script-actions-bottom">
+                        <button type="button" class="kb-copy-btn-inline" onclick="copyScript('sol_script')">📋 העתק</button>
+                    </div>
                 </div>
                 <?php endif; ?>
-                <?php if($article->solution_files): 
+                <?php if($article->solution_files):
                     $files = json_decode($article->solution_files, true);
                     if($files):
                 ?>
                 <div class="kb-section"><h3>קבצים מצורפים</h3>
-                <?php foreach($files as $file): ?>
-                    <a href="<?php echo esc_url($file); ?>" target="_blank" class="kb-download-btn">📥 <?php echo basename($file); ?></a><br>
+                <?php foreach($files as $file): $align = $this->get_alignment_class($file); ?>
+                    <div class="kb-attachment <?php echo $align; ?>">
+                        <a href="<?php echo esc_url($file); ?>" target="_blank" class="kb-download-btn">📥 <?php echo basename($file); ?></a>
+                    </div>
                 <?php endforeach; ?>
                 </div>
                 <?php endif; endif; ?>
                 <?php if($article->post_check): ?><div class="kb-section"><h3>בדיקת פתרון</h3><?php echo $article->post_check; ?></div><?php endif; ?>
                 <?php if($article->check_script): ?>
                 <div class="kb-section kb-script-section">
-                    <h3>סקריפט בדיקה <button type="button" class="kb-copy-btn-inline" onclick="copyScript('check_script')">📋 העתק</button></h3>
+                    <div class="kb-script-actions">
+                        <button type="button" class="kb-copy-btn-inline" onclick="copyScript('check_script')">📋 העתק</button>
+                    </div>
                     <pre id="check_script" dir="ltr"><?php echo esc_html($article->check_script); ?></pre>
+                    <div class="kb-script-actions kb-script-actions-bottom">
+                        <button type="button" class="kb-copy-btn-inline" onclick="copyScript('check_script')">📋 העתק</button>
+                    </div>
                 </div>
                 <?php endif; ?>
-                <?php if($article->check_files): 
+                <?php if($article->check_files):
                     $files = json_decode($article->check_files, true);
                     if($files):
                 ?>
                 <div class="kb-section"><h3>קבצי בדיקה</h3>
-                <?php foreach($files as $file): ?>
-                    <a href="<?php echo esc_url($file); ?>" target="_blank" class="kb-download-btn">📥 <?php echo basename($file); ?></a><br>
+                <?php foreach($files as $file): $align = $this->get_alignment_class($file); ?>
+                    <div class="kb-attachment <?php echo $align; ?>">
+                        <a href="<?php echo esc_url($file); ?>" target="_blank" class="kb-download-btn">📥 <?php echo basename($file); ?></a>
+                    </div>
                 <?php endforeach; ?>
                 </div>
                 <?php endif; endif; ?>
@@ -4288,6 +4366,9 @@ XML;
             .kb-btn-back:hover { background:#7f8c8d; }
             .kb-copy-btn-inline { padding:5px 12px; background:#27ae60; color:#fff; border:none; border-radius:4px; cursor:pointer; font-size:13px; }
             .kb-copy-btn-inline:hover { background:#229954; }
+            .kb-script-actions { display:flex; justify-content:flex-end; margin-bottom:8px; }
+            .kb-script-actions-bottom { margin-top:8px; }
+            .kb-attachment { margin:4px 0; }
             </style>
             <script>
             function copyScript(id){
