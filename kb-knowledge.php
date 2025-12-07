@@ -647,6 +647,15 @@ class KB_KnowledgeBase_Editor {
         return $this->sanitize_vulnerability_level($value);
     }
 
+    private function contains_hebrew($text) {
+        return preg_match('/\p{Hebrew}/u', (string) $text) === 1;
+    }
+
+    private function get_alignment_class($text) {
+        if($text === '' || is_null($text)) return '';
+        return $this->contains_hebrew($text) ? 'kb-align-rtl' : 'kb-align-ltr';
+    }
+
     private function normalize_status_from_text($value) {
         if(is_null($value) || $value === '') return 0;
         $value = trim(mb_strtolower($value));
@@ -814,34 +823,34 @@ class KB_KnowledgeBase_Editor {
 
             if(!$current) continue;
 
-            if(preg_match('/^Subject\s*:\s*(.+)$/i', $text, $m)) {
-                $current['subject'] = $m[1];
+            if(preg_match('/Subject\s*:\s*(.+)/iu', $text, $m)) {
+                $current['subject'] = trim($m[1]);
                 continue;
             }
-            if(preg_match('/^Category\s*:\s*(.+)$/i', $text, $m)) {
-                $current['main_category'] = $m[1];
+            if(preg_match('/Category\s*:\s*(.+)/iu', $text, $m)) {
+                $current['main_category'] = trim($m[1]);
                 continue;
             }
-            if(preg_match('/^Subcategory\s*:\s*(.+)$/i', $text, $m)) {
-                $current['sub_category'] = $m[1];
+            if(preg_match('/Subcategory\s*:\s*(.+)/iu', $text, $m)) {
+                $current['sub_category'] = trim($m[1]);
                 continue;
             }
-            if(preg_match('/^Review Status\s*:\s*(.+)$/i', $text, $m)) {
+            if(preg_match('/Review Status\s*:\s*(.+)/iu', $text, $m)) {
                 $current['review_status'] = $this->normalize_status_from_text($m[1]);
                 continue;
             }
-            if(preg_match('/^Rating\s*:\s*(.+)$/i', $text, $m)) {
+            if(preg_match('/Rating\s*:\s*(.+)/iu', $text, $m)) {
                 $rating_val = trim($m[1]);
                 $rating_int = ($rating_val === '') ? null : intval($rating_val);
                 $current['user_rating'] = ($rating_int >=1 && $rating_int <=100) ? $rating_int : null;
                 continue;
             }
-            if(preg_match('/^Vulnerability\s*:\s*(.+)$/i', $text, $m)) {
-                $current['vulnerability_level'] = $this->normalize_vulnerability_from_text($m[1]);
+            if(preg_match('/Vulnerability\s*:\s*(.+)/iu', $text, $m)) {
+                $current['vulnerability_level'] = $this->normalize_vulnerability_from_text(trim($m[1]));
                 continue;
             }
-            if(preg_match('/^Links\s*:\s*(.+)$/i', $text, $m)) {
-                $current['links'] = $m[1];
+            if(preg_match('/Links\s*:\s*(.+)/iu', $text, $m)) {
+                $current['links'] = trim($m[1]);
                 continue;
             }
 
@@ -858,6 +867,14 @@ class KB_KnowledgeBase_Editor {
                 if(stripos($text, $label) === 0) { $matched_section = $key; break; }
             }
             if($matched_section) { $current_section = $matched_section; continue; }
+
+            // Fallback: treat the first non-label paragraph after [[ARTICLE]] as the subject if the explicit label is missing.
+            if($current && $current['subject'] === '' && trim($text) !== '' && $current_section === '') {
+                if(!preg_match('/\w+\s*:/u', $text)) {
+                    $current['subject'] = trim($text);
+                    continue;
+                }
+            }
 
             if($current_section && $html) {
                 $current['sections'][$current_section][] = $html;
@@ -2782,16 +2799,20 @@ XML;
                     $vulnerability_label = $this->get_vulnerability_label($article);
                     $vulnerability_level = $this->sanitize_vulnerability_level($article->vulnerability_level ?? null);
                     $status_label = isset($status_labels[$article->review_status]) ? $status_labels[$article->review_status] : '';
+                    $subject_align = $this->get_alignment_class($article->subject);
+                    $main_align = $this->get_alignment_class($main_cat);
+                    $sub_align = $this->get_alignment_class($sub_cat);
+                    $vuln_align = $this->get_alignment_class($vulnerability_label);
                 ?>
                     <tr class="kb-table-row" data-article-id="<?php echo intval($article->id); ?>" data-subject="<?php echo esc_attr(mb_strtolower($article->subject)); ?>" data-subject-label="<?php echo esc_attr($article->subject); ?>" data-maincat="<?php echo esc_attr(mb_strtolower($main_cat)); ?>" data-maincat-label="<?php echo esc_attr($main_cat); ?>" data-subcat="<?php echo esc_attr(mb_strtolower($sub_cat)); ?>" data-subcat-label="<?php echo esc_attr($sub_cat); ?>" data-status="<?php echo intval($article->review_status); ?>" data-status-label="<?php echo esc_attr($status_label); ?>" data-rating="<?php echo is_null($rating_value) ? '' : intval($rating_value); ?>" data-execution="<?php echo $execution_mode==='אוטומטי' ? 'auto' : 'manual'; ?>" data-execution-label="<?php echo esc_attr($execution_mode); ?>" data-vulnerability="<?php echo $vulnerability_level ? intval($vulnerability_level) : ''; ?>" data-vulnerability-label="<?php echo esc_attr($vulnerability_label); ?>">
                         <td><?php if(current_user_can('manage_options')): ?><input type="checkbox" name="kb_selected[]" value="<?php echo intval($article->id); ?>" class="kb-row-select"><?php endif; ?></td>
-                        <td><?php echo esc_html($article->subject); ?></td>
-                        <td class="kb-col-maincat">&lrm;<?php echo esc_html($main_cat); ?></td>
-                        <td class="kb-col-subcat">&lrm;<?php echo esc_html($sub_cat); ?></td>
+                        <td class="<?php echo esc_attr($subject_align); ?>"><?php echo esc_html($article->subject); ?></td>
+                        <td class="kb-col-maincat <?php echo esc_attr($main_align); ?>">&lrm;<?php echo esc_html($main_cat); ?></td>
+                        <td class="kb-col-subcat <?php echo esc_attr($sub_align); ?>">&lrm;<?php echo esc_html($sub_cat); ?></td>
                         <td class="kb-col-status"><?php echo $this->render_status_badge($article->review_status, false); ?></td>
                         <td class="kb-col-rating"><?php echo $this->render_rating_badge($article); ?></td>
                         <td><span class="kb-execution-chip <?php echo $execution_mode==='אוטומטי' ? 'kb-execution-auto' : 'kb-execution-manual'; ?>"><?php echo esc_html($execution_mode); ?></span></td>
-                        <td><?php echo $vulnerability_label ? esc_html($vulnerability_label) : ''; ?></td>
+                        <td class="<?php echo esc_attr($vuln_align); ?>"><?php echo $vulnerability_label ? esc_html($vulnerability_label) : ''; ?></td>
                     </tr>
                     <tr class="kb-table-row-detail" data-article-id="<?php echo intval($article->id); ?>" style="display:none;">
                         <td colspan="8">
@@ -3296,16 +3317,20 @@ XML;
                     $vulnerability_label = $this->get_vulnerability_label($article);
                     $vulnerability_level = $this->sanitize_vulnerability_level($article->vulnerability_level ?? null);
                     $status_label = isset($status_labels[$article->review_status]) ? $status_labels[$article->review_status] : '';
+                    $subject_align = $this->get_alignment_class($article->subject);
+                    $main_align = $this->get_alignment_class($main_cat);
+                    $sub_align = $this->get_alignment_class($sub_cat);
+                    $vuln_align = $this->get_alignment_class($vulnerability_label);
                 ?>
                     <tr class="kb-table-row" data-article-id="<?php echo intval($article->id); ?>" data-subject="<?php echo esc_attr(mb_strtolower($article->subject)); ?>" data-subject-label="<?php echo esc_attr($article->subject); ?>" data-maincat="<?php echo esc_attr(mb_strtolower($main_cat)); ?>" data-maincat-label="<?php echo esc_attr($main_cat); ?>" data-subcat="<?php echo esc_attr(mb_strtolower($sub_cat)); ?>" data-subcat-label="<?php echo esc_attr($sub_cat); ?>" data-status="<?php echo intval($article->review_status); ?>" data-status-label="<?php echo esc_attr($status_label); ?>" data-rating="<?php echo is_null($rating_value) ? '' : intval($rating_value); ?>" data-execution="<?php echo $execution_mode==='אוטומטי' ? 'auto' : 'manual'; ?>" data-execution-label="<?php echo esc_attr($execution_mode); ?>" data-vulnerability="<?php echo $vulnerability_level ? intval($vulnerability_level) : ''; ?>" data-vulnerability-label="<?php echo esc_attr($vulnerability_label); ?>">
                         <td><?php if(current_user_can('manage_options')): ?><input type="checkbox" name="kb_selected[]" value="<?php echo intval($article->id); ?>" class="kb-row-select"><?php endif; ?></td>
-                        <td><?php echo esc_html($article->subject); ?></td>
-                        <td class="kb-col-maincat">&lrm;<?php echo esc_html($main_cat); ?></td>
-                        <td class="kb-col-subcat">&lrm;<?php echo esc_html($sub_cat); ?></td>
+                        <td class="<?php echo esc_attr($subject_align); ?>"><?php echo esc_html($article->subject); ?></td>
+                        <td class="kb-col-maincat <?php echo esc_attr($main_align); ?>">&lrm;<?php echo esc_html($main_cat); ?></td>
+                        <td class="kb-col-subcat <?php echo esc_attr($sub_align); ?>">&lrm;<?php echo esc_html($sub_cat); ?></td>
                         <td class="kb-col-status"><?php echo $this->render_status_badge($article->review_status, false); ?></td>
                         <td class="kb-col-rating"><?php echo $this->render_rating_badge($article); ?></td>
                         <td><span class="kb-execution-chip <?php echo $execution_mode==='אוטומטי' ? 'kb-execution-auto' : 'kb-execution-manual'; ?>"><?php echo esc_html($execution_mode); ?></span></td>
-                        <td><?php echo $vulnerability_label ? esc_html($vulnerability_label) : ''; ?></td>
+                        <td class="<?php echo esc_attr($vuln_align); ?>"><?php echo $vulnerability_label ? esc_html($vulnerability_label) : ''; ?></td>
                     </tr>
                     <tr class="kb-table-row-detail" data-article-id="<?php echo intval($article->id); ?>" style="display:none;">
                         <td colspan="8">
@@ -3732,16 +3757,20 @@ XML;
                     $vulnerability_label = $this->get_vulnerability_label($article);
                     $vulnerability_level = $this->sanitize_vulnerability_level($article->vulnerability_level ?? null);
                     $status_label = isset($status_labels[$article->review_status]) ? $status_labels[$article->review_status] : '';
+                    $subject_align = $this->get_alignment_class($article->subject);
+                    $main_align = $this->get_alignment_class($main_cat);
+                    $sub_align = $this->get_alignment_class($sub_cat);
+                    $vuln_align = $this->get_alignment_class($vulnerability_label);
                 ?>
                     <tr class="kb-table-row" data-article-id="<?php echo intval($article->id); ?>" data-subject="<?php echo esc_attr(mb_strtolower($article->subject)); ?>" data-subject-label="<?php echo esc_attr($article->subject); ?>" data-maincat="<?php echo esc_attr(mb_strtolower($main_cat)); ?>" data-maincat-label="<?php echo esc_attr($main_cat); ?>" data-subcat="<?php echo esc_attr(mb_strtolower($sub_cat)); ?>" data-subcat-label="<?php echo esc_attr($sub_cat); ?>" data-status="<?php echo intval($article->review_status); ?>" data-status-label="<?php echo esc_attr($status_label); ?>" data-rating="<?php echo is_null($rating_value) ? '' : intval($rating_value); ?>" data-execution="<?php echo $execution_mode==='אוטומטי' ? 'auto' : 'manual'; ?>" data-execution-label="<?php echo esc_attr($execution_mode); ?>" data-vulnerability="<?php echo $vulnerability_level ? intval($vulnerability_level) : ''; ?>" data-vulnerability-label="<?php echo esc_attr($vulnerability_label); ?>">
                         <td><?php if(current_user_can('manage_options')): ?><input type="checkbox" name="kb_selected[]" value="<?php echo intval($article->id); ?>" class="kb-row-select"><?php endif; ?></td>
-                        <td><?php echo esc_html($article->subject); ?></td>
-                        <td class="kb-col-maincat">&lrm;<?php echo esc_html($main_cat); ?></td>
-                        <td class="kb-col-subcat">&lrm;<?php echo esc_html($sub_cat); ?></td>
+                        <td class="<?php echo esc_attr($subject_align); ?>"><?php echo esc_html($article->subject); ?></td>
+                        <td class="kb-col-maincat <?php echo esc_attr($main_align); ?>">&lrm;<?php echo esc_html($main_cat); ?></td>
+                        <td class="kb-col-subcat <?php echo esc_attr($sub_align); ?>">&lrm;<?php echo esc_html($sub_cat); ?></td>
                         <td class="kb-col-status"><?php echo $this->render_status_badge($article->review_status, false); ?></td>
                         <td class="kb-col-rating"><?php echo $this->render_rating_badge($article); ?></td>
                         <td><span class="kb-execution-chip <?php echo $execution_mode==='אוטומטי' ? 'kb-execution-auto' : 'kb-execution-manual'; ?>"><?php echo esc_html($execution_mode); ?></span></td>
-                        <td><?php echo $vulnerability_label ? esc_html($vulnerability_label) : ''; ?></td>
+                        <td class="<?php echo esc_attr($vuln_align); ?>"><?php echo $vulnerability_label ? esc_html($vulnerability_label) : ''; ?></td>
                     </tr>
                     <tr class="kb-table-row-detail" data-article-id="<?php echo intval($article->id); ?>" style="display:none;">
                         <td colspan="8">
