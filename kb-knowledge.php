@@ -1107,8 +1107,14 @@ XML;
         ?>
         <div class="kb-article-body-block">
             <?php if($include_meta) echo $this->render_article_meta($article); ?>
-            <?php if($article->technical_desc): ?><div class="kb-section"><h3>תיאור טכני</h3><?php echo $article->technical_desc; ?></div><?php endif; ?>
-            <?php if($article->technical_solution): ?><div class="kb-section"><h3>פתרון טכני</h3><?php echo $article->technical_solution; ?></div><?php endif; ?>
+            <?php if($article->technical_desc): ?>
+                <?php $align = $this->get_alignment_class($article->technical_desc); ?>
+                <div class="kb-section <?php echo $align; ?>"><h3>תיאור טכני</h3><?php echo $article->technical_desc; ?></div>
+            <?php endif; ?>
+            <?php if($article->technical_solution): ?>
+                <?php $align = $this->get_alignment_class($article->technical_solution); ?>
+                <div class="kb-section <?php echo $align; ?>"><h3>פתרון טכני</h3><?php echo $article->technical_solution; ?></div>
+            <?php endif; ?>
             <?php if($article->solution_script): ?>
             <div class="kb-section kb-script-section">
                 <h3>סקריפט פתרון</h3>
@@ -1124,7 +1130,10 @@ XML;
                 <?php endforeach; ?>
             </div>
             <?php endif; endif; ?>
-            <?php if($article->post_check): ?><div class="kb-section"><h3>בדיקת פתרון</h3><?php echo $article->post_check; ?></div><?php endif; ?>
+            <?php if($article->post_check): ?>
+                <?php $align = $this->get_alignment_class($article->post_check); ?>
+                <div class="kb-section <?php echo $align; ?>"><h3>בדיקת פתרון</h3><?php echo $article->post_check; ?></div>
+            <?php endif; ?>
             <?php if($article->check_script): ?>
             <div class="kb-section kb-script-section">
                 <h3>סקריפט בדיקה</h3>
@@ -1140,7 +1149,10 @@ XML;
                 <?php endforeach; ?>
             </div>
             <?php endif; endif; ?>
-            <?php if($article->links): ?><div class="kb-section"><h3>קישורים רלוונטיים</h3><?php echo $article->links; ?></div><?php endif; ?>
+            <?php if($article->links): ?>
+                <?php $align = $this->get_alignment_class($article->links); ?>
+                <div class="kb-section <?php echo $align; ?>"><h3>קישורים רלוונטיים</h3><?php echo $article->links; ?></div>
+            <?php endif; ?>
         </div>
         <?php
         return ob_get_clean();
@@ -1220,6 +1232,16 @@ XML;
             $wpdb->query("DELETE FROM $table WHERE id IN ($id_list)");
         } elseif($action === 'unarchive_bulk') {
             $wpdb->query("UPDATE $table SET is_archived=0 WHERE id IN ($id_list)");
+        }
+
+        if($redirect_url) {
+            if (headers_sent()) {
+                echo '<script>window.location.href=' . json_encode($redirect_url) . ';</script>';
+                exit;
+            }
+
+            wp_safe_redirect($redirect_url);
+            exit;
         }
 
         if($redirect_url) {
