@@ -791,12 +791,14 @@ class KB_KnowledgeBase_Editor {
         $articles = [];
         $current = null;
         $current_section = '';
+        $pending_field = '';
         $used_images = [];
 
         foreach(iterator_to_array($body->childNodes) as $node) {
             if($node->nodeName !== 'w:p') continue;
             $text = $this->collect_paragraph_text($node);
             $html = $this->render_docx_paragraph_html($node, $used_images);
+            $trimmed = trim($text);
 
             if(strpos($text, '[[ARTICLE]]') !== false) {
                 if($current) { $articles[] = $current; }
@@ -818,39 +820,107 @@ class KB_KnowledgeBase_Editor {
                     ],
                 ];
                 $current_section = '';
+                $pending_field = '';
                 continue;
             }
 
             if(!$current) continue;
 
-            if(preg_match('/Subject\s*:\s*(.+)/iu', $text, $m)) {
-                $current['subject'] = trim($m[1]);
+            // Capture a value following a blank label line (e.g., "Subject:" then value on next line).
+            if($pending_field && $trimmed !== '') {
+                $is_label_line = preg_match('/\w+\s*:/u', $trimmed) === 1;
+                if(!$is_label_line) {
+                    switch($pending_field) {
+                        case 'subject':
+                            $current['subject'] = $trimmed;
+                            break;
+                        case 'main_category':
+                            $current['main_category'] = $trimmed;
+                            break;
+                        case 'sub_category':
+                            $current['sub_category'] = $trimmed;
+                            break;
+                        case 'review_status':
+                            $current['review_status'] = $this->normalize_status_from_text($trimmed);
+                            break;
+                        case 'user_rating':
+                            $rating_int = intval($trimmed);
+                            $current['user_rating'] = ($rating_int >=1 && $rating_int <=100) ? $rating_int : null;
+                            break;
+                        case 'vulnerability_level':
+                            $current['vulnerability_level'] = $this->normalize_vulnerability_from_text($trimmed);
+                            break;
+                        case 'links':
+                            $current['links'] = $trimmed;
+                            break;
+                    }
+                    $pending_field = '';
+                    continue;
+                }
+            }
+
+            if(preg_match('/^\s*Subject\s*:\s*(.*)$/iu', $text, $m)) {
+                $subject_val = trim($m[1]);
+                if($subject_val !== '') {
+                    $current['subject'] = $subject_val;
+                } else {
+                    $pending_field = 'subject';
+                }
                 continue;
             }
-            if(preg_match('/Category\s*:\s*(.+)/iu', $text, $m)) {
-                $current['main_category'] = trim($m[1]);
+            if(preg_match('/^\s*Category\s*:\s*(.*)$/iu', $text, $m)) {
+                $cat_val = trim($m[1]);
+                if($cat_val !== '') {
+                    $current['main_category'] = $cat_val;
+                } else {
+                    $pending_field = 'main_category';
+                }
                 continue;
             }
-            if(preg_match('/Subcategory\s*:\s*(.+)/iu', $text, $m)) {
-                $current['sub_category'] = trim($m[1]);
+            if(preg_match('/^\s*Subcategory\s*:\s*(.*)$/iu', $text, $m)) {
+                $sub_val = trim($m[1]);
+                if($sub_val !== '') {
+                    $current['sub_category'] = $sub_val;
+                } else {
+                    $pending_field = 'sub_category';
+                }
                 continue;
             }
-            if(preg_match('/Review Status\s*:\s*(.+)/iu', $text, $m)) {
-                $current['review_status'] = $this->normalize_status_from_text($m[1]);
+            if(preg_match('/^\s*Review Status\s*:\s*(.*)$/iu', $text, $m)) {
+                $rev_val = trim($m[1]);
+                if($rev_val !== '') {
+                    $current['review_status'] = $this->normalize_status_from_text($rev_val);
+                } else {
+                    $pending_field = 'review_status';
+                }
                 continue;
             }
-            if(preg_match('/Rating\s*:\s*(.+)/iu', $text, $m)) {
+            if(preg_match('/^\s*Rating\s*:\s*(.*)$/iu', $text, $m)) {
                 $rating_val = trim($m[1]);
-                $rating_int = ($rating_val === '') ? null : intval($rating_val);
-                $current['user_rating'] = ($rating_int >=1 && $rating_int <=100) ? $rating_int : null;
+                if($rating_val !== '') {
+                    $rating_int = intval($rating_val);
+                    $current['user_rating'] = ($rating_int >=1 && $rating_int <=100) ? $rating_int : null;
+                } else {
+                    $pending_field = 'user_rating';
+                }
                 continue;
             }
-            if(preg_match('/Vulnerability\s*:\s*(.+)/iu', $text, $m)) {
-                $current['vulnerability_level'] = $this->normalize_vulnerability_from_text(trim($m[1]));
+            if(preg_match('/^\s*Vulnerability\s*:\s*(.*)$/iu', $text, $m)) {
+                $vuln_val = trim($m[1]);
+                if($vuln_val !== '') {
+                    $current['vulnerability_level'] = $this->normalize_vulnerability_from_text($vuln_val);
+                } else {
+                    $pending_field = 'vulnerability_level';
+                }
                 continue;
             }
-            if(preg_match('/Links\s*:\s*(.+)/iu', $text, $m)) {
-                $current['links'] = trim($m[1]);
+            if(preg_match('/^\s*Links\s*:\s*(.*)$/iu', $text, $m)) {
+                $links_val = trim($m[1]);
+                if($links_val !== '') {
+                    $current['links'] = $links_val;
+                } else {
+                    $pending_field = 'links';
+                }
                 continue;
             }
 
@@ -869,9 +939,9 @@ class KB_KnowledgeBase_Editor {
             if($matched_section) { $current_section = $matched_section; continue; }
 
             // Fallback: treat the first non-label paragraph after [[ARTICLE]] as the subject if the explicit label is missing.
-            if($current && $current['subject'] === '' && trim($text) !== '' && $current_section === '') {
-                if(!preg_match('/\w+\s*:/u', $text)) {
-                    $current['subject'] = trim($text);
+            if($current && $current['subject'] === '' && $trimmed !== '' && $current_section === '' && !$pending_field) {
+                if(!preg_match('/\w+\s*:/u', $trimmed)) {
+                    $current['subject'] = $trimmed;
                     continue;
                 }
             }
@@ -1243,28 +1313,6 @@ XML;
             wp_safe_redirect($redirect_url);
             exit;
         }
-
-        if($redirect_url) {
-            if (headers_sent()) {
-                echo '<script>window.location.href=' . json_encode($redirect_url) . ';</script>';
-                exit;
-            }
-
-            wp_safe_redirect($redirect_url);
-            exit;
-        }
-
-        if($redirect_url) {
-            if (headers_sent()) {
-                echo '<script>window.location.href=' . json_encode($redirect_url) . ';</script>';
-                exit;
-            }
-
-            wp_safe_redirect($redirect_url);
-            exit;
-        }
-
-        wp_send_json_success($result);
     }
 
     public function main_page() {
